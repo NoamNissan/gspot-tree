@@ -1,4 +1,4 @@
-from evdev import InputDevice, categorize, ecodes
+from evdev import InputDevice, categorize, ecodes, list_devices
 import time
 import logging
 import signal
@@ -12,30 +12,86 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+def find_rfid_device(target_description: str = "HID 5131:2007") -> Optional[str]:
+    """
+    Find the RFID device with the specified description.
+    
+    Args:
+        target_description (str): The device description to look for
+        
+    Returns:
+        Optional[str]: Path to the device if found, None otherwise
+    """
+    logger = logging.getLogger('RFIDDeviceFinder')
+    
+    try:
+        devices = list_devices()
+        logger.info(f"Scanning {len(devices)} input devices for RFID reader...")
+        
+        for device_path in devices:
+            try:
+                device = InputDevice(device_path)
+                device_info = device.info
+                device_name = device.name
+                device_phys = device.phys
+                
+                logger.debug(f"Device {device_path}: name='{device_name}', phys='{device_phys}'")
+                
+                # Check if this device matches our target description
+                if target_description in device_name or target_description in str(device_info):
+                    logger.info(f"Found RFID device: {device_path} - {device_name}")
+                    return device_path
+                    
+            except Exception as e:
+                logger.debug(f"Error reading device {device_path}: {e}")
+                continue
+        
+        logger.warning(f"No device found with description '{target_description}'")
+        logger.info("Available devices:")
+        for device_path in devices:
+            try:
+                device = InputDevice(device_path)
+                logger.info(f"  {device_path}: {device.name}")
+            except Exception as e:
+                logger.debug(f"  {device_path}: Error reading device info - {e}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error scanning for devices: {e}")
+        return None
+
 class RFIDDecoder:
     """
     A class that encapsulates RFID decoding logic and provides a clean interface
     for reading RFID codes from a device.
     """
     
-    def __init__(self, device_path: str = '/dev/input/event4', log_level: int = logging.INFO):
+    def __init__(self, device_path: Optional[str] = None, log_level: int = logging.INFO):
         """
-        Initialize the RFID decoder with the specified device path.
+        Initialize the RFID decoder with the specified device path or auto-detect.
         
         Args:
-            device_path (str): Path to the RFID input device
+            device_path (Optional[str]): Path to the RFID input device. If None, auto-detect.
             log_level (int): Logging level (default: logging.INFO)
         """
+        # Configure logger for this instance
+        self.logger = logging.getLogger('RFIDDecoder')
+        self.logger.setLevel(log_level)
+        
+        # Auto-detect device if not provided
+        if device_path is None:
+            self.logger.info("No device path provided, auto-detecting RFID device...")
+            device_path = find_rfid_device()
+            if device_path is None:
+                raise RuntimeError("Could not find RFID device with description 'HID 5131:2007'")
+        
         self.device_path = device_path
         self.device = None
         self.buffer = []
         self.is_running = False
         self.on_rfid_scanned: Optional[Callable[[str], None]] = None
         self._shutdown_event = threading.Event()
-        
-        # Configure logger for this instance
-        self.logger = logging.getLogger(f'RFIDDecoder_{device_path}')
-        self.logger.setLevel(log_level)
         
         # Key mapping for RFID reader
         self.key_map = {
@@ -73,6 +129,7 @@ class RFIDDecoder:
             self.device = InputDevice(self.device_path)
             self.is_running = True
             self.logger.info(f"RFID Reader started on {self.device_path}")
+            self.logger.info(f"Device name: {self.device.name}")
             self.logger.info(f"Device capabilities: {self.device.capabilities()}")
             
             for event in self.device.read_loop():
