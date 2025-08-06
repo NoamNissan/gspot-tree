@@ -18,7 +18,7 @@ class RFIDReader:
     - Raspberry Pi mode: Uses RFIDDecoder to read from hardware device
     """
     
-    def __init__(self, mode: OperatingMode = OperatingMode.LINUX, device_path: str = '/dev/input/event4'):
+    def __init__(self, mode: OperatingMode = OperatingMode.RASPBERRY_PI, device_path: str = '/dev/input/event4'):
         """
         Initialize the RFID reader with the specified mode.
         
