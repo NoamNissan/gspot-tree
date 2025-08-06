@@ -30,6 +30,20 @@ if ! grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null; then
     echo -e "${YELLOW}Warning: This doesn't appear to be a Raspberry Pi${NC}"
 fi
 
+# Check if the gspot user exists
+if ! id "$SERVICE_USER" &>/dev/null; then
+    echo -e "${RED}Error: User '$SERVICE_USER' does not exist${NC}"
+    echo "Please create the user first with: sudo adduser $SERVICE_USER"
+    exit 1
+fi
+
+# Ensure the user has a home directory
+if [ ! -d "/home/$SERVICE_USER" ]; then
+    echo -e "${RED}Error: User '$SERVICE_USER' does not have a home directory${NC}"
+    echo "Please ensure the user has a proper home directory"
+    exit 1
+fi
+
 # Get the current directory (where the script is being run from)
 CURRENT_DIR="$(pwd)"
 
@@ -66,6 +80,10 @@ $PYTHON_PATH -m venv .venv
 # Install dependencies using the virtual environment's pip directly
 echo "Installing dependencies..."
 $APP_DIR/.venv/bin/pip install -r requirements.txt
+
+# Ensure the user has audio group permissions
+echo "Setting up audio permissions..."
+usermod -a -G audio "$SERVICE_USER" 2>/dev/null || echo "Warning: Could not add user to audio group"
 
 
 # Create systemd service file
