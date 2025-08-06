@@ -1,0 +1,131 @@
+#!/bin/bash
+
+# RFID Music Player Update Script
+# This script copies the application from the development machine to the Raspberry Pi
+# and restarts the service
+
+set -e  # Exit on any error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Configuration - UPDATE THESE VALUES
+PI_HOSTNAME="gspot.local"  # Change this to your Pi's hostname or IP
+PI_USER="gspot"
+PI_APP_DIR="/home/gspot/gspot-tree"
+SERVICE_NAME="gspot-tree"
+
+# Files and directories to exclude from sync
+EXCLUDE_PATTERNS=(
+    "--exclude=.git"
+    "--exclude=.gitignore"
+    "--exclude=__pycache__"
+    "--exclude=*.pyc"
+    "--exclude=*.pyo"
+    "--exclude=.DS_Store"
+    "--exclude=deployment"
+    "--exclude=.venv"
+    "--exclude=*.log"
+)
+
+echo -e "${GREEN}GSpot Tree Update Script${NC}"
+echo "This script will update the application on the Raspberry Pi and restart the service."
+echo ""
+
+# Check if rsync is available
+if ! command -v rsync &> /dev/null; then
+    echo -e "${RED}Error: rsync is not installed. Please install it first.${NC}"
+    echo "On macOS: brew install rsync"
+    echo "On Ubuntu/Debian: sudo apt-get install rsync"
+    exit 1
+fi
+
+# Check if we can connect to the Pi
+echo "Testing connection to Raspberry Pi..."
+if ! ping -c 1 "$PI_HOSTNAME" &> /dev/null; then
+    echo -e "${RED}Error: Cannot reach $PI_HOSTNAME${NC}"
+    echo "Please check:"
+    echo "  1. The Pi is powered on and connected to the network"
+    echo "  2. The hostname/IP address is correct"
+    echo "  3. You're on the same network as the Pi"
+    exit 1
+fi
+
+# Get the current directory (should be the project root)
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+echo "Project directory: $PROJECT_DIR"
+echo "Target Pi: $PI_USER@$PI_HOSTNAME:$PI_APP_DIR"
+echo ""
+
+# Confirm before proceeding
+read -p "Do you want to proceed with the update? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Update cancelled."
+    exit 0
+fi
+
+echo ""
+echo -e "${YELLOW}Step 1: Copying files to Raspberry Pi...${NC}"
+
+# Create the exclude string
+EXCLUDE_STRING=""
+for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+    EXCLUDE_STRING="$EXCLUDE_STRING $pattern"
+done
+
+# Sync files to the Pi
+rsync -avz --delete $EXCLUDE_STRING \
+    "$PROJECT_DIR/" \
+    "$PI_USER@$PI_HOSTNAME:$PI_APP_DIR/"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Files copied successfully!${NC}"
+else
+    echo -e "${RED}Error copying files${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${YELLOW}Step 2: Installing/updating Python dependencies...${NC}"
+
+# Install Python dependencies in virtual environment on the Pi
+ssh "$PI_USER@$PI_HOSTNAME" "cd $PI_APP_DIR && if [ ! -d '.venv' ]; then python3 -m venv .venv; fi && .venv/bin/pip install -r requirements.txt"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Dependencies updated successfully!${NC}"
+else
+    echo -e "${RED}Error updating dependencies${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${YELLOW}Step 3: Restarting the service...${NC}"
+
+# Restart the service on the Pi
+ssh "$PI_USER@$PI_HOSTNAME" "sudo systemctl restart $SERVICE_NAME"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Service restarted successfully!${NC}"
+else
+    echo -e "${RED}Error restarting service${NC}"
+    exit 1
+fi
+
+# Check service status
+echo ""
+echo -e "${YELLOW}Step 4: Checking service status...${NC}"
+ssh "$PI_USER@$PI_HOSTNAME" "sudo systemctl status $SERVICE_NAME --no-pager -l"
+
+echo ""
+echo -e "${GREEN}Update completed successfully!${NC}"
+echo ""
+echo "Useful commands:"
+echo "  View logs: ssh $PI_USER@$PI_HOSTNAME 'sudo journalctl -u $SERVICE_NAME -f'"
+echo "  Check status: ssh $PI_USER@$PI_HOSTNAME 'sudo systemctl status $SERVICE_NAME'"
+echo "  Stop service: ssh $PI_USER@$PI_HOSTNAME 'sudo systemctl stop $SERVICE_NAME'"
+echo "  Start service: ssh $PI_USER@$PI_HOSTNAME 'sudo systemctl start $SERVICE_NAME'" 
