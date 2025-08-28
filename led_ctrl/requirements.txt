@@ -1,0 +1,19 @@
+# LED Recipe System Requirements
+
+# Core dependencies
+numpy>=1.21.0
+sounddevice>=0.4.0
+asyncio-mqtt>=0.11.0
+
+# GUI simulation (optional)
+tkinter  # Usually included with Python
+
+# Hardware support (Raspberry Pi only)
+# Uncomment for real LED hardware:
+# rpi-ws281x>=4.3.0
+# adafruit-circuitpython-neopixel>=6.0.0
+
+# Audio system dependencies
+# macOS: Uses Core Audio (built-in) - no additional packages needed
+# Linux/Pi: sudo apt-get install portaudio19-dev
+# Windows: Usually works out of the box with DirectSound
