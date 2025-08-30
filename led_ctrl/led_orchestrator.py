@@ -13,7 +13,7 @@ import time
 from led_controller import Color
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
-    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, Effect
+    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, BlendMode, Effect
 )
 
 @dataclass
@@ -400,9 +400,16 @@ class RecipeManager:
         removal_delay = transition_time / max(len(remove_effects), 1) if remove_effects else 0
         for effect_type in remove_effects:
             print(f"  🗑️ Removing {effect_type}")
-            effect_id = self.active_effects[effect_type]
-            self.controller.pipeline.remove_effect(effect_id)
-            del self.active_effects[effect_type]
+            if effect_type in self.active_effects:
+                effect_id = self.active_effects[effect_type]
+                removed = self.controller.pipeline.remove_effect(effect_id)
+                if removed:
+                    del self.active_effects[effect_type]
+                    print(f"    ✅ Successfully removed {effect_type}")
+                else:
+                    print(f"    ❌ Failed to remove {effect_type} (ID: {effect_id})")
+            else:
+                print(f"    ⚠️ Effect {effect_type} not in active_effects")
             if removal_delay > 0:
                 await asyncio.sleep(removal_delay)
         
@@ -438,6 +445,19 @@ class RecipeManager:
             effect = WaveEffect()
         elif effect_type == "random_flash":
             effect = RandomFlashEffect()
+        elif effect_type == "rainbow":
+            effect = RainbowEffect()
+            effect.blend_mode = BlendMode.REPLACE  # Replace base colors with rainbow
+        elif effect_type == "spectrum":
+            effect = SpectrumEffect(self.controller.num_pixels)
+        elif effect_type == "energy":
+            effect = EnergyEffect(self.controller.num_pixels)
+        elif effect_type == "wavelength":
+            effect = WavelengthEffect(self.controller.num_pixels)
+        elif effect_type == "scroll":
+            effect = ScrollEffect(self.controller.num_pixels)
+        elif effect_type == "bars":
+            effect = BarsEffect(self.controller.num_pixels)
         elif effect_type == "music_visualizer":
             # Get or create global audio provider
             if not hasattr(self, 'audio_provider'):
@@ -450,9 +470,223 @@ class RecipeManager:
         effect.update_parameters(effect_config.parameters)
         return self.controller.pipeline.add_effect(effect)
 
+# Simple Rainbow Effect for better visual quality
+class SpectrumEffect(Effect):
+    """LedFx-style spectrum analyzer effect"""
+    
+    def __init__(self, num_leds: int, color: Color = Color(0, 0, 255), **kwargs):
+        from pipeline_demo import Effect as PipelineEffect
+        PipelineEffect.__init__(self)
+        self.num_leds = num_leds
+        self.color = color
+        self.num_bands = 8
+        self.band_width = num_leds // self.num_bands
+        
+    def _apply_effect(self, colors, elapsed: float):
+        from led_controller import Color
+        import colorsys
+        
+        result = [Color(0, 0, 0)] * len(colors)
+        
+        # Simulate frequency bands
+        for band in range(self.num_bands):
+            # Simulate intensity based on time and band
+            intensity = 0.3 + 0.7 * abs(np.sin(elapsed * 2 + band * 0.8))
+            height = int(intensity * self.band_width)
+            
+            # Color based on frequency
+            hue = band / self.num_bands * 0.8
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, intensity)
+            color = Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            
+            start_led = band * self.band_width
+            for i in range(height):
+                if start_led + i < len(colors):
+                    result[start_led + i] = color
+                    
+        return result
+
+class EnergyEffect(Effect):
+    """LedFx-style energy effect"""
+    
+    def __init__(self, num_leds: int, **kwargs):
+        from pipeline_demo import Effect as PipelineEffect
+        PipelineEffect.__init__(self)
+        self.num_leds = num_leds
+        
+    def _apply_effect(self, colors, elapsed: float):
+        from led_controller import Color
+        import time
+        
+        # Simulate energy levels
+        energy = 0.5 + 0.5 * abs(np.sin(elapsed * 2))
+        
+        # Energy-based color
+        if energy > 0.8:
+            base_color = (255, 255, 0)  # Yellow
+        elif energy > 0.5:
+            base_color = (255, 100, 0)  # Orange
+        else:
+            base_color = (255, 0, 0)    # Red
+            
+        result = []
+        for i in range(len(colors)):
+            variation = 0.8 + 0.2 * np.sin(elapsed * 5 + i * 0.1)
+            brightness = energy * variation
+            
+            result.append(Color(
+                int(base_color[0] * brightness),
+                int(base_color[1] * brightness), 
+                int(base_color[2] * brightness)
+            ))
+            
+        return result
+
+class WavelengthEffect(Effect):
+    """LedFx-style wavelength effect"""
+    
+    def __init__(self, num_leds: int, **kwargs):
+        from pipeline_demo import Effect as PipelineEffect
+        PipelineEffect.__init__(self)
+        self.num_leds = num_leds
+        
+    def _apply_effect(self, colors, elapsed: float):
+        from led_controller import Color
+        import colorsys
+        
+        result = []
+        for i in range(len(colors)):
+            # Traveling wave
+            wave = np.sin(2 * np.pi * (i / 20.0 - elapsed * 2))
+            
+            if wave > 0:
+                hue = 0.1 - wave * 0.1  # Red to orange
+                brightness = wave
+            else:
+                hue = 0.6 + abs(wave) * 0.1  # Blue to cyan
+                brightness = abs(wave)
+                
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, brightness)
+            result.append(Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
+            
+        return result
+
+class ScrollEffect(Effect):
+    """LedFx-style scroll effect"""
+    
+    def __init__(self, num_leds: int, **kwargs):
+        from pipeline_demo import Effect as PipelineEffect
+        PipelineEffect.__init__(self)
+        self.num_leds = num_leds
+        self.pattern_length = 20
+        self.pattern = []
+        
+        # Create rainbow pattern
+        import colorsys
+        for i in range(self.pattern_length):
+            hue = i / self.pattern_length
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            self.pattern.append((int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
+            
+    def _apply_effect(self, colors, elapsed: float):
+        from led_controller import Color
+        import time
+        
+        # Scroll speed
+        speed = 5.0
+        offset = int(elapsed * speed) % self.pattern_length
+        
+        result = []
+        for i in range(len(colors)):
+            pattern_idx = (i + offset) % self.pattern_length
+            color = self.pattern[pattern_idx]
+            result.append(Color(color[0], color[1], color[2]))
+            
+        return result
+
+class BarsEffect(Effect):
+    """LedFx-style bars effect"""
+    
+    def __init__(self, num_leds: int, **kwargs):
+        from pipeline_demo import Effect as PipelineEffect
+        PipelineEffect.__init__(self)
+        self.num_leds = num_leds
+        self.num_bars = 10
+        self.bar_width = num_leds // self.num_bars
+        
+    def _apply_effect(self, colors, elapsed: float):
+        from led_controller import Color
+        import colorsys
+        
+        result = [Color(0, 0, 0)] * len(colors)
+        
+        for bar in range(self.num_bars):
+            # Simulate frequency data
+            freq_data = 0.2 + 0.8 * abs(np.sin(elapsed * 4 + bar * 0.6))
+            bar_height = int(freq_data * self.bar_width)
+            hue = bar / self.num_bars * 0.8
+            
+            start_led = bar * self.bar_width
+            for i in range(self.bar_width):
+                led_idx = start_led + i
+                if led_idx < len(colors) and i < bar_height:
+                    brightness = 1.0 - (i / self.bar_width) * 0.5
+                    rgb = colorsys.hsv_to_rgb(hue, 1.0, brightness)
+                    result[led_idx] = Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+                    
+        return result
+    """Simple rainbow effect like the old demo"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 0.5
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        """Apply smooth rainbow across all pixels using vectorized operations"""
+        num_pixels = len(colors)
+        
+        # Vectorized hue calculation
+        pixel_indices = np.arange(num_pixels)
+        hues = (pixel_indices / num_pixels + elapsed * self.parameters['speed']) % 1.0
+        
+        # Vectorized HSV to RGB conversion
+        rgb_array = self._hsv_to_rgb_vectorized(hues)
+        
+        # Convert to Color objects
+        return [Color(int(rgb[0]), int(rgb[1]), int(rgb[2])) for rgb in rgb_array]
+    
+    def _hsv_to_rgb_vectorized(self, hues: np.ndarray) -> np.ndarray:
+        """Vectorized HSV to RGB conversion (s=1.0, v=1.0)"""
+        h = hues % 1.0
+        c = 1.0  # v * s = 1.0 * 1.0
+        x = c * (1 - np.abs((h * 6) % 2 - 1))
+        
+        # Create output array
+        rgb = np.zeros((len(h), 3))
+        
+        # Vectorized conditions for each hue sector
+        sector0 = h < 1/6
+        sector1 = (h >= 1/6) & (h < 2/6)
+        sector2 = (h >= 2/6) & (h < 3/6)
+        sector3 = (h >= 3/6) & (h < 4/6)
+        sector4 = (h >= 4/6) & (h < 5/6)
+        sector5 = h >= 5/6
+        
+        # Assign RGB values for each sector
+        rgb[sector0] = np.column_stack([np.full(np.sum(sector0), c), x[sector0], np.zeros(np.sum(sector0))])
+        rgb[sector1] = np.column_stack([x[sector1], np.full(np.sum(sector1), c), np.zeros(np.sum(sector1))])
+        rgb[sector2] = np.column_stack([np.zeros(np.sum(sector2)), np.full(np.sum(sector2), c), x[sector2]])
+        rgb[sector3] = np.column_stack([np.zeros(np.sum(sector3)), x[sector3], np.full(np.sum(sector3), c)])
+        rgb[sector4] = np.column_stack([x[sector4], np.zeros(np.sum(sector4)), np.full(np.sum(sector4), c)])
+        rgb[sector5] = np.column_stack([np.full(np.sum(sector5), c), np.zeros(np.sum(sector5)), x[sector5]])
+        
+        return rgb * 255
+
 # Recipe Definitions
 RECIPES = {
-    "recipe1": Recipe(
+    "complex_demo": Recipe(
         name="Complex Demo",
         description="Multi-effect demonstration",
         base_colors=BaseColorConfig(
@@ -467,8 +701,8 @@ RECIPES = {
         ]
     ),
     
-    "recipe2": Recipe(
-        name="Red-Pink Breathing",
+    "sunset_breathing": Recipe(
+        name="Sunset Breathing",
         description="Calm red-pink transition with breathing and flashes",
         base_colors=BaseColorConfig(
             colors=[Color(255, 0, 0), Color(255, 192, 203)],
@@ -481,7 +715,7 @@ RECIPES = {
         ]
     ),
     
-    "recipe3": Recipe(
+    "rainbow_wave": Recipe(
         name="Rainbow Wave",
         description="Rainbow colors with wave effect",
         base_colors=BaseColorConfig(
@@ -495,6 +729,18 @@ RECIPES = {
         effects=[
             EffectConfig("wave", {"speed": 2.0, "amplitude": 0.3}),
             EffectConfig("sparkle", {"density": 0.05})
+        ]
+    ),
+    
+    "rainbow": Recipe(
+        name="Pure Rainbow",
+        description="Classic rainbow cycling effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 255, 255)],  # Dummy base color
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow", {"speed": 0.5})
         ]
     ),
     
@@ -521,6 +767,66 @@ RECIPES = {
         effects=[
             EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0})  # Much lower sensitivity
         ]
+    ),
+    
+    "spectrum_analyzer": Recipe(
+        name="Spectrum Analyzer",
+        description="LedFx-style spectrum analyzer bars",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("spectrum", {"sensitivity": 1.0})
+        ]
+    ),
+    
+    "energy_pulse": Recipe(
+        name="Energy Pulse",
+        description="Energy-based color changes",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("energy", {"sensitivity": 1.2})
+        ]
+    ),
+    
+    "wavelength_flow": Recipe(
+        name="Wavelength Flow",
+        description="Traveling wavelength effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("wavelength", {"speed": 1.0})
+        ]
+    ),
+    
+    "rainbow_scroll": Recipe(
+        name="Rainbow Scroll",
+        description="Scrolling rainbow pattern",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("scroll", {"speed": 1.5})
+        ]
+    ),
+    
+    "frequency_bars": Recipe(
+        name="Frequency Bars",
+        description="Audio frequency bar visualization",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("bars", {"sensitivity": 1.0})
+        ]
     )
 }
 
@@ -537,18 +843,43 @@ async def demo_recipe_transitions(num_pixels: int = 100):
         recipe_manager = RecipeManager(controller)
         
         print("🍽️ Recipe Transition Demo")
+        print("Press Ctrl+C to stop at any time")
         
-        # Apply recipe1
-        await recipe_manager.apply_recipe(RECIPES["recipe1"])
-        await asyncio.sleep(8)
+        # Apply complex_demo
+        await recipe_manager.apply_recipe(RECIPES["complex_demo"])
+        await asyncio.sleep(5)  # Reduced from 10
         
-        # Transition to recipe2 (breathing continues, other effects change)
-        await recipe_manager.apply_recipe(RECIPES["recipe2"], transition_time=3.0)
-        await asyncio.sleep(8)
+        # Pure rainbow effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
+        await asyncio.sleep(4)  # Reduced from 8
         
-        # Transition to recipe3
-        await recipe_manager.apply_recipe(RECIPES["recipe3"], transition_time=3.0)
-        await asyncio.sleep(8)
+        # Transition to sunset_breathing (breathing continues, other effects change)
+        await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
+        await asyncio.sleep(4)  # Reduced from 8
+        
+        # Transition to rainbow_wave
+        await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
+        await asyncio.sleep(4)  # Reduced from 8
+        
+        # LedFx-style spectrum analyzer
+        await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
+        await asyncio.sleep(4)  # Reduced from 8
+        
+        # Energy pulse effect
+        await recipe_manager.apply_recipe(RECIPES["energy_pulse"], transition_time=2.0)
+        await asyncio.sleep(3)  # Reduced from 6
+        
+        # Wavelength flow
+        await recipe_manager.apply_recipe(RECIPES["wavelength_flow"], transition_time=2.0)
+        await asyncio.sleep(3)  # Reduced from 6
+        
+        # Rainbow scroll
+        await recipe_manager.apply_recipe(RECIPES["rainbow_scroll"], transition_time=2.0)
+        await asyncio.sleep(3)  # Reduced from 6
+        
+        # Frequency bars
+        await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
+        await asyncio.sleep(4)  # Reduced from 8
         
         # Music spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
@@ -558,9 +889,9 @@ async def demo_recipe_transitions(num_pixels: int = 100):
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
         await asyncio.sleep(10)
         
-        # Back to recipe2 (smooth transition)
-        await recipe_manager.apply_recipe(RECIPES["recipe2"], transition_time=3.0)
-        await asyncio.sleep(5)
+        # Back to sunset_breathing (smooth transition)
+        await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
+        await asyncio.sleep(8)
         
         print("🍽️ Recipe demo completed!")
         render_task.cancel()
@@ -612,7 +943,7 @@ async def main():
     
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
-    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (recipe1, recipe2, recipe3, music_spectrum, music_pulse)')
+    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
     
     args = parser.parse_args()
     

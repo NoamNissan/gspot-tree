@@ -236,21 +236,28 @@ class RainbowEffect(Effect):
         }
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
-        # Calculate rainbow hues for all pixels at once
-        pixel_indices = np.arange(len(colors))
-        hues = (pixel_indices / len(colors) * self.parameters['density'] + elapsed * self.parameters['speed']) % 1.0
+        """Apply smooth rainbow across all pixels using simple HSV conversion"""
+        result = []
         
-        # Convert HSV to RGB vectorized
-        rainbow_rgb = self._hsv_to_rgb_vectorized(hues, 1.0, 1.0)
+        for i, color in enumerate(colors):
+            # Calculate hue for this pixel
+            hue = (i / len(colors) * self.parameters['density'] + elapsed * self.parameters['speed']) % 1.0
+            
+            # Simple HSV to RGB conversion
+            import colorsys
+            r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            
+            if self.blend_mode == BlendMode.REPLACE:
+                result.append(Color(int(r * 255), int(g * 255), int(b * 255)))
+            else:
+                # Multiply with original color
+                result.append(Color(
+                    int(color.r * r),
+                    int(color.g * g), 
+                    int(color.b * b)
+                ))
         
-        if self.blend_mode == BlendMode.REPLACE:
-            # Replace with rainbow colors
-            return [Color(int(rgb[0]), int(rgb[1]), int(rgb[2])) for rgb in rainbow_rgb]
-        else:
-            # Multiply with original colors
-            color_array = np.array([[c.r, c.g, c.b] for c in colors], dtype=np.float32)
-            blended = color_array * rainbow_rgb / 255.0
-            return [Color(int(rgb[0]), int(rgb[1]), int(rgb[2])) for rgb in blended]
+        return result
     
     def _hsv_to_rgb_vectorized(self, h: np.ndarray, s: float, v: float) -> np.ndarray:
         """Vectorized HSV to RGB conversion"""

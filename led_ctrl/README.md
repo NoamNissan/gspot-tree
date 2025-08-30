@@ -42,14 +42,17 @@ python led_orchestrator.py --recipe music_spectrum --pixels 200
 
 ## 🍽️ Available Recipes
 
-### **recipe1** - Complex Demo
+### **complex_demo** - Complex Demo
 Multi-effect demonstration with breathing, sparkle, wave, and strobe effects.
 
-### **recipe2** - Red-Pink Breathing  
+### **sunset_breathing** - Sunset Breathing 🌅
 Calm red-pink color transition with gentle breathing and random white flashes.
 
-### **recipe3** - Rainbow Wave
+### **rainbow_wave** - Rainbow Wave
 Rainbow color cycling with wave effects and sparkles.
+
+### **rainbow** - Pure Rainbow 🌈
+Classic rainbow cycling effect, similar to the old demo.
 
 ### **music_spectrum** - Music Spectrum Analyzer 🎵
 Real-time 3-band spectrum analyzer (bass=red, mid=green, high=blue).
