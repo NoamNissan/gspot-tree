@@ -938,19 +938,55 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100):
             recipe_manager.audio_provider.stop()
         await controller.stop()
 
+async def light_single_led(led_index: int, num_pixels: int = 100):
+    """Light up a single LED in white by index"""
+    controller = PipelineController(num_pixels, force_simulation=True)
+    await controller.start()
+    
+    try:
+        # Create all black colors except the specified index
+        colors = [Color(0, 0, 0)] * num_pixels
+        if 0 <= led_index < num_pixels:
+            colors[led_index] = Color(255, 255, 255)  # White
+            print(f"💡 Lighting LED {led_index} in white (out of {num_pixels} LEDs)")
+        else:
+            print(f"❌ LED index {led_index} out of range (0-{num_pixels-1})")
+            return
+        
+        # Set static colors
+        controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        
+        # Start rendering loop
+        render_task = asyncio.create_task(controller.run_loop())
+        
+        print("   Press Ctrl+C to stop...")
+        
+        # Run indefinitely until interrupted
+        while True:
+            await asyncio.sleep(1)
+        
+    except KeyboardInterrupt:
+        print(f"\n💡 Single LED {led_index} stopped")
+    finally:
+        await controller.stop()
+
 async def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
+    parser.add_argument('--single-led', type=int, help='Light up only one LED by index (0-based)')
     
     args = parser.parse_args()
     
     print(f"🍽️ Recipe System")
     print(f"  Pixels: {args.pixels}")
     
-    if args.recipe:
+    if args.single_led is not None:
+        print(f"  Mode: Single LED ({args.single_led})")
+        await light_single_led(args.single_led, args.pixels)
+    elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
         await run_single_recipe(args.recipe, args.pixels)
     else:
