@@ -371,7 +371,7 @@ class PipelineController:
     def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = True):
         self.num_pixels = num_pixels
         self.pipeline = EffectPipeline(num_pixels)
-        self.pixels = MockNeoPixel(pin, num_pixels, brightness=1.0, auto_write=False)
+        self.pixels = MockNeoPixel(pin, num_pixels, brightness=1.0, auto_write=True)
         self.running = False
         self.start_time = 0
     

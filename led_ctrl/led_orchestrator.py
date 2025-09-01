@@ -10,7 +10,10 @@ import numpy as np
 import sounddevice as sd
 import threading
 import time
+import socket
+import json
 from led_controller import Color
+from mock_neopixel import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, BlendMode, Effect
@@ -700,7 +703,7 @@ RECIPES = {
             EffectConfig("breathing", {"speed": 0.5, "min_intensity": 0.3}),
             EffectConfig("sparkle", {"density": 0.1}),
             EffectConfig("wave", {"speed": 1.0}),
-            EffectConfig("strobe", {"frequency": 3.0})
+            # EffectConfig("strobe", {"frequency": 3.0})
         ]
     ),
     
@@ -941,6 +944,29 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100):
             recipe_manager.audio_provider.stop()
         await controller.stop()
 
+async def clear_all_leds(num_pixels: int, use_persistent_gui: bool = False):
+    """Clear all LEDs to black"""
+    # Only needed for persistent GUI mode - regular mode starts blank anyway
+    if use_persistent_gui:
+        try:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.connect(('localhost', PERSISTENT_GUI_PORT))
+            
+            # Send bulk update command (more efficient)
+            command = {
+                'type': 'update_all_pixels',
+                'pixels': [[0, 0, 0]] * num_pixels
+            }
+            message = json.dumps(command) + '\n'
+            client_socket.send(message.encode())
+            
+            client_socket.close()
+            print("  Sent bulk clear command to persistent GUI")
+        except Exception as e:
+            print(f"  Failed to connect to persistent GUI: {e}")
+    else:
+        print("  Non-persistent mode starts blank automatically")
+
 async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
     """LED crawl mode - progressively light up LEDs with blinking"""
     controller = PipelineController(num_pixels, force_simulation=True)
@@ -991,7 +1017,7 @@ async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
     finally:
         await controller.stop()
 
-async def light_single_led(led_index: int, num_pixels: int = 100):
+async def light_single_led(led_index: int, num_pixels: int = 100, start_blank: bool = False):
     """Light up a single LED in white by index"""
     controller = PipelineController(num_pixels, force_simulation=True)
     await controller.start()
@@ -1039,6 +1065,19 @@ async def main():
     
     print(f"🍽️ Recipe System")
     print(f"  Pixels: {args.pixels}")
+    
+    # Enable persistent GUI mode if requested
+    if args.persistent_gui:
+        import mock_neopixel
+        mock_neopixel.set_persistent_mode(True)
+        print(f"  GUI: Persistent mode enabled")
+    
+    # Clear all LEDs if requested
+    if args.start_blank:
+        print(f"  Clearing all LEDs to black...")
+        await clear_all_leds(args.pixels, args.persistent_gui)
+        # Brief pause to ensure clear completes before next command
+        await asyncio.sleep(0.2)
     
     if args.single_led is not None:
         print(f"  Mode: Single LED ({args.single_led})")
