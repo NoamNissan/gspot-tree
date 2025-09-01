@@ -833,6 +833,31 @@ RECIPES = {
         effects=[
             EffectConfig("bars", {"sensitivity": 1.0})
         ]
+    ),
+    
+    "blue_magenta_breathing": Recipe(
+        name="Blue Magenta Breathing",
+        description="Blue to magenta breathing colors",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 255), Color(255, 0, 255)],  # Blue to magenta
+            mode=TransitionMode.FADE,
+            speed=0.2
+        ),
+        effects=[
+            EffectConfig("breathing", {"speed": 0.4, "min_intensity": 0.3})
+        ]
+    ),
+    
+    "white_strobe": Recipe(
+        name="White Strobe",
+        description="High-frequency white strobe (stroboscopic effect)",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 255, 255)],  # White
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("strobe", {"frequency": 100.0, "duty_cycle": 0.5})  # True stroboscopic range
+        ]
     )
 }
 
@@ -894,6 +919,19 @@ async def demo_recipe_transitions(num_pixels: int = 100):
         # Music pulse effect
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
         await asyncio.sleep(10)
+        
+        # Stroboscopic demo: Blue/Magenta breathing vs White strobe
+        print("🔥 Starting stroboscopic demo...")
+        
+        # Stroboscopic cycle: 10s breathing + 5s strobe, repeat 3 times
+        for cycle in range(3):
+            print(f"   Cycle {cycle + 1}/3: Breathing phase...")
+            await recipe_manager.apply_recipe(RECIPES["blue_magenta_breathing"], transition_time=0.0)
+            await asyncio.sleep(10.0)
+            
+            print(f"   Cycle {cycle + 1}/3: Strobe phase...")
+            await recipe_manager.apply_recipe(RECIPES["white_strobe"], transition_time=0.0)
+            await asyncio.sleep(5.0)
         
         # Back to sunset_breathing (smooth transition)
         await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
