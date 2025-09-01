@@ -684,6 +684,9 @@ class BarsEffect(Effect):
         
         return rgb * 255
 
+# Configuration
+LED_CRAWL_BLINK_DURATION = 2.0  # seconds per LED blink
+
 # Recipe Definitions
 RECIPES = {
     "complex_demo": Recipe(
@@ -938,6 +941,56 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100):
             recipe_manager.audio_provider.stop()
         await controller.stop()
 
+async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
+    """LED crawl mode - progressively light up LEDs with blinking"""
+    controller = PipelineController(num_pixels, force_simulation=True)
+    await controller.start()
+    
+    try:
+        # Start rendering loop
+        render_task = asyncio.create_task(controller.run_loop())
+        
+        print(f"🐛 LED Crawl Mode - {num_pixels} LEDs")
+        print(f"   Blink duration: {blink_duration}s per LED")
+        print("   Press Ctrl+C to stop...")
+        
+        for current_led in range(num_pixels):
+            print(f"   LED {current_led}: blinking...")
+            
+            # Create colors: previous LEDs solid white, current LED blinks, rest black
+            blink_start = time.time()
+            while time.time() - blink_start < blink_duration:
+                colors = [Color(0, 0, 0)] * num_pixels
+                
+                # Set previous LEDs to solid white
+                for i in range(current_led):
+                    colors[i] = Color(255, 255, 255)
+                
+                # Blink current LED (0.5s on/off cycle)
+                if int((time.time() - blink_start) * 2) % 2 == 0:
+                    colors[current_led] = Color(255, 255, 255)
+                
+                controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+                await asyncio.sleep(0.1)
+            
+            print(f"   LED {current_led}: solid white")
+        
+        # Final state - all LEDs solid white
+        colors = [Color(255, 255, 255)] * num_pixels
+        controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        
+        print("🐛 LED Crawl completed - all LEDs solid white")
+        print("   Press Ctrl+C to stop...")
+        
+        # Keep running until interrupted
+        while True:
+            await asyncio.sleep(1)
+        
+    except KeyboardInterrupt:
+        print(f"\n🐛 LED Crawl stopped")
+    finally:
+        await controller.stop()
+
 async def light_single_led(led_index: int, num_pixels: int = 100):
     """Light up a single LED in white by index"""
     controller = PipelineController(num_pixels, force_simulation=True)
@@ -977,6 +1030,10 @@ async def main():
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
     parser.add_argument('--single-led', type=int, help='Light up only one LED by index (0-based)')
+    parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
+    parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
+    parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
+    parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
     
     args = parser.parse_args()
     
@@ -986,6 +1043,9 @@ async def main():
     if args.single_led is not None:
         print(f"  Mode: Single LED ({args.single_led})")
         await light_single_led(args.single_led, args.pixels)
+    elif args.led_crawl:
+        print(f"  Mode: LED Crawl")
+        await led_crawl(args.pixels, args.crawl_blink_time)
     elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
         await run_single_recipe(args.recipe, args.pixels)
