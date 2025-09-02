@@ -18,7 +18,7 @@ from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
-    CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect,
+    CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect, WalkingEffect,
     BlendMode, Effect
 )
 
@@ -480,6 +480,8 @@ class RecipeManager:
             effect = PowerEffect()
         elif effect_type == "rain":
             effect = RainEffect()
+        elif effect_type == "walking":
+            effect = WalkingEffect()
         elif effect_type == "spectrum":
             effect = SpectrumEffect(self.controller.num_pixels)
         elif effect_type == "energy":
@@ -1025,6 +1027,18 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("metro", {"bpm": 120, "flash_duration": 0.1})
+        ]
+    ),
+    
+    "walking_lights": Recipe(
+        name="Walking Lights",
+        description="White lights walking back and forth",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base (effect creates white)
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("walking", {"width": 2, "speed": 5, "direction_change_time": 6.0})
         ]
     ),
     

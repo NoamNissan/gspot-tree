@@ -644,6 +644,81 @@ class PowerEffect(Effect):
             ))
         return result
 
+class WalkingEffect(Effect):
+    """Walking white lights that bounce back and forth with constantly changing speed"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'width': 1,  # Number of consecutive white lights
+            'speed': 2.0,  # Base speed of movement
+            'direction_change_time': 3.0  # Max time before switching direction
+        }
+        self.last_direction_change = 0.0
+        self.current_direction = 1  # 1 for forward, -1 for backward
+        self.next_change_time = np.random.uniform(0.5, self.parameters['direction_change_time'])
+        self.position = 0.0
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Continuously randomize speed (changes every frame)
+        current_speed = np.random.uniform(0.3, 2.5) * self.parameters['speed']
+        
+        # Check if it's time to change direction
+        if elapsed - self.last_direction_change >= self.next_change_time:
+            self.current_direction *= -1  # Reverse direction
+            self.last_direction_change = elapsed
+            # Bias toward forward direction - forward lasts much longer than backward
+            if self.current_direction == 1:  # Now moving forward
+                self.next_change_time = np.random.uniform(1.5, self.parameters['direction_change_time'])
+            else:  # Now moving backward
+                self.next_change_time = np.random.uniform(0.2, self.parameters['direction_change_time'] * 0.4)
+        
+        # Update position based on current direction and randomized speed
+        dt = 0.016  # Approximate frame time
+        self.position += self.current_direction * current_speed * dt
+        
+        # Clamp position to valid range
+        max_pos = num_pixels - self.parameters['width']
+        if self.position < 0:
+            self.position = 0
+            self.current_direction = 1
+        elif self.position > max_pos:
+            self.position = max_pos
+            self.current_direction = -1
+        
+        start_pos = int(self.position)
+        
+        # Vectorized LED creation
+        pixel_indices = np.arange(num_pixels)
+        active_mask = (pixel_indices >= start_pos) & (pixel_indices < start_pos + self.parameters['width'])
+        
+        # Calculate brightness for active pixels
+        if self.parameters['width'] > 2:
+            # Vectorized brightness calculation
+            group_center = start_pos + (self.parameters['width'] - 1) / 2
+            distances = np.abs(pixel_indices - group_center)
+            max_distance = (self.parameters['width'] - 1) / 2
+            brightness = np.where(active_mask, 1.0 - (distances / max_distance) * 0.2, 0.0)
+            brightness = np.clip(brightness, 0.0, 1.0)
+        else:
+            # Width 1 or 2 - full brightness for active pixels
+            brightness = active_mask.astype(float)
+        
+        # Convert to Color objects
+        result = []
+        for i in range(num_pixels):
+            if active_mask[i]:
+                b = brightness[i]
+                result.append(Color(int(255 * b), int(255 * b), int(255 * b)))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        return result
+
 class RainEffect(Effect):
     """Rain droplet effect"""
     
