@@ -16,7 +16,7 @@ from led_controller import Color
 from mock_neopixel import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
-    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, BlendMode, Effect
+    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect, BlendMode, Effect
 )
 
 @dataclass
@@ -451,6 +451,8 @@ class RecipeManager:
         elif effect_type == "rainbow":
             effect = RainbowEffect()
             effect.blend_mode = BlendMode.REPLACE  # Replace base colors with rainbow
+        elif effect_type == "lava_lamp":
+            effect = LavaLampEffect()
         elif effect_type == "spectrum":
             effect = SpectrumEffect(self.controller.num_pixels)
         elif effect_type == "energy":
@@ -832,6 +834,19 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("bars", {"sensitivity": 1.0})
+        ]
+    ),
+    
+    "lava_lamp": Recipe(
+        name="Lava Lamp",
+        description="Smooth flowing lava lamp effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 100, 0), Color(255, 0, 100)],  # Orange to magenta
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("lava_lamp", {"speed": 1.0, "contrast": 0.6})
         ]
     ),
     

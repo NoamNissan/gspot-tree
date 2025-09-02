@@ -225,6 +225,54 @@ class RandomFlashEffect(Effect):
         
         return result
 
+class LavaLampEffect(Effect):
+    """Lava lamp flowing effect with smooth color transitions"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 1.0,
+            'contrast': 0.6  # Difference between light and dark spots
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Vectorized time calculations
+        t1 = elapsed * self.parameters['speed']
+        t2 = elapsed * self.parameters['speed'] * 2
+        
+        # Vectorized position array
+        positions = np.linspace(0, 1, num_pixels)
+        
+        # Vectorized wave calculations
+        w1 = np.sin(t1 + positions * np.pi * 2)
+        w2 = np.sin(t2 - positions * np.pi * 2)
+        w3 = np.sin(positions + w1 + w2)
+        
+        # Vectorized intensity calculation
+        intensity = (w1 + 0.1) * (w2 + 0.1) * (w3 + 0.1)
+        intensity = np.clip(intensity, 0, 1)
+        
+        # Apply contrast
+        contrast = 1 - self.parameters['contrast']
+        intensity = np.power(intensity + contrast, 2)
+        intensity = np.clip(intensity, 0, 1)
+        
+        # Apply to base colors
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensity[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        
+        return result
+
 class RainbowEffect(Effect):
     """Rainbow color overlay"""
     
