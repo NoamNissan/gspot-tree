@@ -273,6 +273,413 @@ class LavaLampEffect(Effect):
         
         return result
 
+class FireEffect(Effect):
+    """Flickering fire simulation with sparks"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 0.04,
+            'intensity': 8,
+            'fade_chance': 0.5
+        }
+        self.spark_pixels = None
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        if self.spark_pixels is None:
+            self.spark_pixels = np.zeros(num_pixels, dtype=np.float32)
+        
+        # Create new sparks randomly
+        new_sparks = np.random.random(num_pixels) < self.parameters['speed']
+        self.spark_pixels[new_sparks] = np.random.random(np.sum(new_sparks)) * self.parameters['intensity']
+        
+        # Fade existing sparks
+        fade_mask = np.random.random(num_pixels) < self.parameters['fade_chance']
+        self.spark_pixels[fade_mask] *= 0.8
+        
+        # Apply fire effect to base colors
+        result = []
+        for i, base_color in enumerate(colors):
+            intensity = min(1.0, self.spark_pixels[i])
+            result.append(Color(
+                min(255, int(base_color.r * (0.5 + intensity * 0.5))),
+                min(255, int(base_color.g * (0.3 + intensity * 0.3))),
+                int(base_color.b * 0.1)
+            ))
+        return result
+
+class MeltEffect(Effect):
+    """Melting/dripping effect"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 0.5,
+            'reactivity': 0.5
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Create melting pattern
+        positions = np.linspace(0, 1, num_pixels)
+        melt_wave = np.sin(elapsed * self.parameters['speed'] + positions * np.pi * 4)
+        melt_intensity = (melt_wave + 1) * 0.5  # Normalize to 0-1
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = melt_intensity[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class FadeEffect(Effect):
+    """Smooth color fading through gradients"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 0.5
+        }
+        self.fade_index = 0.0
+        self.forward = True
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        # Update fade index
+        self.fade_index += 0.0015 * self.parameters['speed']
+        if self.fade_index > 1:
+            self.fade_index = 1
+            self.forward = not self.forward
+        self.fade_index = self.fade_index % 1
+        
+        fade_mult = self.fade_index if self.forward else 1 - self.fade_index
+        
+        result = []
+        for base_color in colors:
+            result.append(Color(
+                int(base_color.r * fade_mult),
+                int(base_color.g * fade_mult),
+                int(base_color.b * fade_mult)
+            ))
+        return result
+
+class ScanEffect(Effect):
+    """Scanner/cylon eye effect"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 2.0,
+            'width': 5
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Calculate scanner position
+        cycle_time = 2.0 / self.parameters['speed']
+        phase = (elapsed % cycle_time) / cycle_time
+        if phase > 0.5:
+            phase = 1.0 - phase
+        scanner_pos = phase * 2 * (num_pixels - 1)
+        
+        # Create scanner beam
+        positions = np.arange(num_pixels)
+        distances = np.abs(positions - scanner_pos)
+        intensities = np.maximum(0, 1 - distances / self.parameters['width'])
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensities[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class MarchingEffect(Effect):
+    """Marching ants pattern"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 1.0,
+            'size': 4
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Create marching pattern
+        offset = elapsed * self.parameters['speed'] * self.parameters['size']
+        positions = np.arange(num_pixels) + offset
+        pattern = (positions // self.parameters['size']) % 2
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = pattern[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class BlocksEffect(Effect):
+    """Moving color blocks"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 1.0,
+            'block_size': 8
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Create moving blocks
+        offset = elapsed * self.parameters['speed'] * self.parameters['block_size']
+        positions = (np.arange(num_pixels) + offset) % (self.parameters['block_size'] * 2)
+        block_pattern = positions < self.parameters['block_size']
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = 1.0 if block_pattern[i] else 0.3
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class CrawlerEffect(Effect):
+    """Crawling pixel effect"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 2.0,
+            'tail_length': 10
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Calculate crawler position
+        crawler_pos = (elapsed * self.parameters['speed']) % num_pixels
+        
+        # Create tail effect
+        positions = np.arange(num_pixels)
+        distances = np.minimum(
+            np.abs(positions - crawler_pos),
+            np.abs(positions - crawler_pos + num_pixels),
+        )
+        distances = np.minimum(distances, np.abs(positions - crawler_pos - num_pixels))
+        
+        intensities = np.maximum(0, 1 - distances / self.parameters['tail_length'])
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensities[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class WaterEffect(Effect):
+    """Water ripple simulation"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 1.0,
+            'ripples': 3
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Create water ripples
+        positions = np.linspace(0, 1, num_pixels)
+        ripple_sum = np.zeros(num_pixels)
+        
+        for i in range(self.parameters['ripples']):
+            phase_offset = i * np.pi / self.parameters['ripples']
+            ripple = np.sin(elapsed * self.parameters['speed'] + positions * np.pi * 4 + phase_offset)
+            ripple_sum += ripple
+        
+        intensities = (ripple_sum / self.parameters['ripples'] + 1) * 0.5
+        intensities = np.clip(intensities, 0, 1)
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensities[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class GlitchEffect(Effect):
+    """Digital glitch/corruption effect"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'intensity': 0.3,
+            'speed': 5.0
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Create glitch pattern
+        glitch_trigger = np.sin(elapsed * self.parameters['speed']) > 0.7
+        if glitch_trigger:
+            # Random glitch pixels
+            glitch_mask = np.random.random(num_pixels) < self.parameters['intensity']
+            glitch_colors = np.random.randint(0, 256, (num_pixels, 3))
+        else:
+            glitch_mask = np.zeros(num_pixels, dtype=bool)
+            glitch_colors = np.zeros((num_pixels, 3))
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            if glitch_mask[i]:
+                result.append(Color(
+                    int(glitch_colors[i, 0]),
+                    int(glitch_colors[i, 1]),
+                    int(glitch_colors[i, 2])
+                ))
+            else:
+                result.append(base_color)
+        return result
+
+class MetroEffect(Effect):
+    """Metronome/beat visualization"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'bpm': 120,
+            'flash_duration': 0.1
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        # Calculate beat timing
+        beat_interval = 60.0 / self.parameters['bpm']
+        beat_phase = (elapsed % beat_interval) / beat_interval
+        
+        # Flash on beat
+        if beat_phase < self.parameters['flash_duration']:
+            intensity = 1.0 - (beat_phase / self.parameters['flash_duration'])
+        else:
+            intensity = 0.3
+        
+        result = []
+        for base_color in colors:
+            result.append(Color(
+                int(base_color.r * intensity),
+                int(base_color.g * intensity),
+                int(base_color.b * intensity)
+            ))
+        return result
+
+class PowerEffect(Effect):
+    """Power level bars"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'level': 0.5,
+            'direction': 1  # 1 for left-to-right, -1 for right-to-left
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Calculate power bar
+        fill_pixels = int(num_pixels * self.parameters['level'])
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            if self.parameters['direction'] > 0:
+                active = i < fill_pixels
+            else:
+                active = i >= (num_pixels - fill_pixels)
+            
+            mult = 1.0 if active else 0.1
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
+class RainEffect(Effect):
+    """Rain droplet effect"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 2.0,
+            'density': 0.1
+        }
+        self.droplets = None
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        if self.droplets is None:
+            self.droplets = np.zeros(num_pixels, dtype=np.float32)
+        
+        # Create new droplets
+        new_drops = np.random.random(num_pixels) < self.parameters['density'] * 0.01
+        self.droplets[new_drops] = 1.0
+        
+        # Move droplets down and fade
+        self.droplets *= 0.95  # Fade
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            drop_intensity = self.droplets[i]
+            result.append(Color(
+                min(255, int(base_color.r + drop_intensity * 100)),
+                min(255, int(base_color.g + drop_intensity * 100)),
+                min(255, int(base_color.b + drop_intensity * 255))
+            ))
+        return result
+
 class RainbowEffect(Effect):
     """Rainbow color overlay"""
     

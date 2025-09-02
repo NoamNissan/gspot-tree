@@ -16,7 +16,10 @@ from led_controller import Color
 from mock_neopixel import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
-    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect, BlendMode, Effect
+    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
+    FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
+    CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect,
+    BlendMode, Effect
 )
 
 @dataclass
@@ -453,6 +456,30 @@ class RecipeManager:
             effect.blend_mode = BlendMode.REPLACE  # Replace base colors with rainbow
         elif effect_type == "lava_lamp":
             effect = LavaLampEffect()
+        elif effect_type == "fire":
+            effect = FireEffect()
+        elif effect_type == "melt":
+            effect = MeltEffect()
+        elif effect_type == "fade":
+            effect = FadeEffect()
+        elif effect_type == "scan":
+            effect = ScanEffect()
+        elif effect_type == "marching":
+            effect = MarchingEffect()
+        elif effect_type == "blocks":
+            effect = BlocksEffect()
+        elif effect_type == "crawler":
+            effect = CrawlerEffect()
+        elif effect_type == "water":
+            effect = WaterEffect()
+        elif effect_type == "glitch":
+            effect = GlitchEffect()
+        elif effect_type == "metro":
+            effect = MetroEffect()
+        elif effect_type == "power":
+            effect = PowerEffect()
+        elif effect_type == "rain":
+            effect = RainEffect()
         elif effect_type == "spectrum":
             effect = SpectrumEffect(self.controller.num_pixels)
         elif effect_type == "energy":
@@ -850,6 +877,157 @@ RECIPES = {
         ]
     ),
     
+    "fire_demo": Recipe(
+        name="Fire Demo",
+        description="Flickering fire effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 100, 0), Color(255, 0, 0)],  # Orange to red
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("fire", {"speed": 0.06, "intensity": 10})
+        ]
+    ),
+    
+    "scanner": Recipe(
+        name="Scanner",
+        description="Cylon eye scanner effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 0)],  # Red
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("scan", {"speed": 3.0, "width": 8})
+        ]
+    ),
+    
+    "digital_rain": Recipe(
+        name="Digital Rain",
+        description="Matrix-style digital rain",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 255, 0)],  # Green
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rain", {"speed": 2.0, "density": 0.15})
+        ]
+    ),
+    
+    "melt_flow": Recipe(
+        name="Melt Flow",
+        description="Melting color flow effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 255), Color(0, 255, 255)],  # Magenta to cyan
+            mode=TransitionMode.FADE,
+            speed=0.2
+        ),
+        effects=[
+            EffectConfig("melt", {"speed": 0.8, "reactivity": 0.6})
+        ]
+    ),
+    
+    "water_ripples": Recipe(
+        name="Water Ripples",
+        description="Calm water ripple effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 100, 255), Color(0, 200, 255)],  # Blue water
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("water", {"speed": 0.8, "ripples": 4})
+        ]
+    ),
+    
+    "marching_ants": Recipe(
+        name="Marching Ants",
+        description="Classic marching ants pattern",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 255, 255)],  # White
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("marching", {"speed": 2.0, "size": 3})
+        ]
+    ),
+    
+    "glitch_matrix": Recipe(
+        name="Glitch Matrix",
+        description="Digital glitch corruption",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 255, 0), Color(255, 0, 0)],  # Green to red
+            mode=TransitionMode.FADE,
+            speed=0.3
+        ),
+        effects=[
+            EffectConfig("glitch", {"intensity": 0.3, "speed": 7.0})
+        ]
+    ),
+    
+    "power_bars": Recipe(
+        name="Power Bars",
+        description="Power level visualization",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 255, 0), Color(255, 255, 0), Color(255, 0, 0)],  # Green to yellow to red
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("power", {"level": 1.0, "direction": 1})  # Full power = all LEDs
+        ]
+    ),
+    
+    "fade_cycle": Recipe(
+        name="Fade Cycle",
+        description="Smooth color fade cycling",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 0), Color(0, 255, 0), Color(0, 0, 255)],  # RGB cycle
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("fade", {"speed": 1.0})
+        ]
+    ),
+    
+    "color_blocks": Recipe(
+        name="Color Blocks",
+        description="Moving color blocks",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 255), Color(255, 255, 0)],  # Magenta to yellow
+            mode=TransitionMode.FADE,
+            speed=0.2
+        ),
+        effects=[
+            EffectConfig("blocks", {"speed": 1.5, "block_size": 6})
+        ]
+    ),
+    
+    "pixel_crawler": Recipe(
+        name="Pixel Crawler",
+        description="Crawling pixel with tail",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 255, 255)],  # Cyan
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("crawler", {"speed": 2.5, "tail_length": 12})
+        ]
+    ),
+    
+    "metro_beat": Recipe(
+        name="Metro Beat",
+        description="Metronome beat flash",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 255, 255)],  # White
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("metro", {"bpm": 120, "flash_duration": 0.1})
+        ]
+    ),
+    
     "blue_magenta_breathing": Recipe(
         name="Blue Magenta Breathing",
         description="Blue to magenta breathing colors",
@@ -926,6 +1104,29 @@ async def demo_recipe_transitions(num_pixels: int = 100):
         # Frequency bars
         await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
         await asyncio.sleep(4)  # Reduced from 8
+        
+        # New effects showcase
+        print("🔥 Showcasing new effects...")
+        
+        # Fire effect
+        await recipe_manager.apply_recipe(RECIPES["fire_demo"], transition_time=2.0)
+        await asyncio.sleep(4)
+        
+        # Scanner effect
+        await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
+        await asyncio.sleep(3)
+        
+        # Water ripples
+        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=2.0)
+        await asyncio.sleep(4)
+        
+        # Glitch matrix
+        await recipe_manager.apply_recipe(RECIPES["glitch_matrix"], transition_time=1.0)
+        await asyncio.sleep(3)
+        
+        # Digital rain
+        await recipe_manager.apply_recipe(RECIPES["digital_rain"], transition_time=2.0)
+        await asyncio.sleep(4)
         
         # Music spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
