@@ -1235,6 +1235,53 @@ async def clear_all_leds(num_pixels: int, use_persistent_gui: bool = False):
     else:
         print("  Non-persistent mode starts blank automatically")
 
+async def set_led_range(range_str: str, num_pixels: int = 100):
+    """Set specific LED range to white, all others black"""
+    controller = PipelineController(num_pixels, force_simulation=True)
+    await controller.start()
+    
+    try:
+        # Start rendering loop
+        render_task = asyncio.create_task(controller.run_loop())
+        
+        # Parse range string
+        if ',' in range_str:
+            # Range: "5,10"
+            start_idx, end_idx = map(int, range_str.split(','))
+            print(f"💡 Setting LED range {start_idx} to {end_idx} (white)")
+        else:
+            # Single LED: "5"
+            start_idx = end_idx = int(range_str)
+            print(f"💡 Setting single LED {start_idx} (white)")
+        
+        # Validate indices
+        if start_idx < 0 or end_idx >= num_pixels or start_idx > end_idx:
+            print(f"❌ Invalid range: {start_idx}-{end_idx} for {num_pixels} LEDs")
+            return
+        
+        # Create colors array - black with white range
+        colors = [Color(0, 0, 0)] * num_pixels
+        for i in range(start_idx, end_idx + 1):
+            colors[i] = Color(255, 255, 255)
+        
+        # Set colors and hold
+        controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        
+        print(f"   LEDs {start_idx}-{end_idx} are white, others are black")
+        print("   Press Ctrl+C to stop...")
+        
+        # Hold the pattern
+        while True:
+            await asyncio.sleep(1.0)
+        
+    except KeyboardInterrupt:
+        print(f"\n💡 LED range display stopped")
+        render_task.cancel()
+    except ValueError:
+        print(f"❌ Invalid range format: '{range_str}'. Use '5' or '5,10'")
+    finally:
+        await controller.stop()
+
 async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
     """LED crawl mode - progressively light up LEDs with blinking"""
     controller = PipelineController(num_pixels, force_simulation=True)
@@ -1285,45 +1332,13 @@ async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
     finally:
         await controller.stop()
 
-async def light_single_led(led_index: int, num_pixels: int = 100, start_blank: bool = False):
-    """Light up a single LED in white by index"""
-    controller = PipelineController(num_pixels, force_simulation=True)
-    await controller.start()
-    
-    try:
-        # Create all black colors except the specified index
-        colors = [Color(0, 0, 0)] * num_pixels
-        if 0 <= led_index < num_pixels:
-            colors[led_index] = Color(255, 255, 255)  # White
-            print(f"💡 Lighting LED {led_index} in white (out of {num_pixels} LEDs)")
-        else:
-            print(f"❌ LED index {led_index} out of range (0-{num_pixels-1})")
-            return
-        
-        # Set static colors
-        controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
-        
-        # Start rendering loop
-        render_task = asyncio.create_task(controller.run_loop())
-        
-        print("   Press Ctrl+C to stop...")
-        
-        # Run indefinitely until interrupted
-        while True:
-            await asyncio.sleep(1)
-        
-    except KeyboardInterrupt:
-        print(f"\n💡 Single LED {led_index} stopped")
-    finally:
-        await controller.stop()
-
 async def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
-    parser.add_argument('--single-led', type=int, help='Light up only one LED by index (0-based)')
+    parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
     parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
     parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
     parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
@@ -1347,9 +1362,9 @@ async def main():
         # Brief pause to ensure clear completes before next command
         await asyncio.sleep(0.2)
     
-    if args.single_led is not None:
-        print(f"  Mode: Single LED ({args.single_led})")
-        await light_single_led(args.single_led, args.pixels)
+    if args.set_led_range:
+        print(f"  Mode: Set LED Range ({args.set_led_range})")
+        await set_led_range(args.set_led_range, args.pixels)
     elif args.led_crawl:
         print(f"  Mode: LED Crawl")
         await led_crawl(args.pixels, args.crawl_blink_time)
