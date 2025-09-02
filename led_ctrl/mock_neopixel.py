@@ -8,9 +8,7 @@ import socket
 import threading
 import json
 from typing import Tuple, List
-
-# Global constants
-PERSISTENT_GUI_PORT = 9999
+from constants import PERSISTENT_GUI_PORT
 
 # Global persistent GUI instance
 _persistent_gui = None

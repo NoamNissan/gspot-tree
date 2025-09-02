@@ -13,7 +13,10 @@ import time
 import socket
 import json
 from led_controller import Color
-from mock_neopixel import PERSISTENT_GUI_PORT
+# Global audio configuration
+SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
+
+from constants import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
@@ -35,8 +38,8 @@ class AudioData:
 class RealTimeAudioProvider:
     """Real-time audio analysis using sounddevice"""
     
-    def __init__(self, sample_rate=22050, block_size=512):
-        self.sample_rate = sample_rate
+    def __init__(self, sample_rate=None, block_size=512):
+        self.sample_rate = sample_rate or SAMPLING_RATE
         self.block_size = block_size
         
         # Audio levels (thread-safe)
@@ -1068,9 +1071,9 @@ RECIPES = {
     )
 }
 
-async def demo_recipe_transitions(num_pixels: int = 100):
+async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool = False):
     """Demonstrate recipe transitions"""
-    controller = PipelineController(num_pixels, force_simulation=True)
+    controller = PipelineController(num_pixels, force_simulation=force_simulation)
     await controller.start()
     
     try:
@@ -1175,14 +1178,14 @@ async def demo_recipe_transitions(num_pixels: int = 100):
     finally:
         await controller.stop()
 
-async def run_single_recipe(recipe_name: str, num_pixels: int = 100):
+async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False):
     """Run a single recipe continuously"""
     if recipe_name not in RECIPES:
         print(f"❌ Recipe '{recipe_name}' not found!")
         print(f"Available recipes: {', '.join(RECIPES.keys())}")
         return
     
-    controller = PipelineController(num_pixels, force_simulation=True)
+    controller = PipelineController(num_pixels, force_simulation=force_simulation)
     await controller.start()
     
     try:
@@ -1235,9 +1238,9 @@ async def clear_all_leds(num_pixels: int, use_persistent_gui: bool = False):
     else:
         print("  Non-persistent mode starts blank automatically")
 
-async def set_led_range(range_str: str, num_pixels: int = 100):
+async def set_led_range(range_str: str, num_pixels: int = 100, force_simulation: bool = False):
     """Set specific LED range to white, all others black"""
-    controller = PipelineController(num_pixels, force_simulation=True)
+    controller = PipelineController(num_pixels, force_simulation=force_simulation)
     await controller.start()
     
     try:
@@ -1282,9 +1285,9 @@ async def set_led_range(range_str: str, num_pixels: int = 100):
     finally:
         await controller.stop()
 
-async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0):
+async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0, force_simulation: bool = False):
     """LED crawl mode - progressively light up LEDs with blinking"""
-    controller = PipelineController(num_pixels, force_simulation=True)
+    controller = PipelineController(num_pixels, force_simulation=force_simulation)
     await controller.start()
     
     try:
@@ -1341,6 +1344,8 @@ async def main():
     parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
     parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
     parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
+    parser.add_argument('--simulation', action='store_true', help='Run in simulation mode with GUI (default: real LEDs)')
+    parser.add_argument('--high-fidelity', action='store_true', help='Use 48kHz audio sampling (default: 16kHz for better compatibility)')
     parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
     parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
     
@@ -1348,6 +1353,14 @@ async def main():
     
     print(f"🍽️ Recipe System")
     print(f"  Pixels: {args.pixels}")
+    
+    # Set audio sampling rate
+    global SAMPLING_RATE
+    if args.high_fidelity:
+        SAMPLING_RATE = 48000
+        print(f"  Audio: High-fidelity mode (48kHz)")
+    else:
+        print(f"  Audio: Standard mode (16kHz)")
     
     # Enable persistent GUI mode if requested
     if args.persistent_gui:
@@ -1362,18 +1375,21 @@ async def main():
         # Brief pause to ensure clear completes before next command
         await asyncio.sleep(0.2)
     
+    # Determine simulation mode - default is real LEDs
+    force_simulation = args.simulation
+    
     if args.set_led_range:
         print(f"  Mode: Set LED Range ({args.set_led_range})")
-        await set_led_range(args.set_led_range, args.pixels)
+        await set_led_range(args.set_led_range, args.pixels, force_simulation)
     elif args.led_crawl:
         print(f"  Mode: LED Crawl")
-        await led_crawl(args.pixels, args.crawl_blink_time)
+        await led_crawl(args.pixels, args.crawl_blink_time, force_simulation)
     elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
-        await run_single_recipe(args.recipe, args.pixels)
+        await run_single_recipe(args.recipe, args.pixels, force_simulation)
     else:
         print(f"  Mode: Full demo sequence")
-        await demo_recipe_transitions(args.pixels)
+        await demo_recipe_transitions(args.pixels, force_simulation)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -14,7 +14,6 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
 from led_controller import Color
-from mock_neopixel import MockNeoPixel
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -901,7 +900,19 @@ class PipelineController:
     def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = True):
         self.num_pixels = num_pixels
         self.pipeline = EffectPipeline(num_pixels)
-        self.pixels = MockNeoPixel(pin, num_pixels, brightness=1.0, auto_write=True)
+        
+        # Import mock neopixel only if simulation is requested
+        if force_simulation:
+            import mock_neopixel  # This will monkey patch neopixel module
+            print("Using LED simulation mode")
+        else:
+            print("Using real LED hardware")
+        
+        # Now import neopixel - will be real or mock depending on above
+        import neopixel
+        import board
+        
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=True)
         self.running = False
         self.start_time = 0
     
