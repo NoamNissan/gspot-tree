@@ -337,12 +337,15 @@ class RecipeManager:
     async def apply_recipe(self, recipe: Recipe, transition_time: float = 2.0):
         """Apply a recipe with smart transitions"""
         print(f"🍽️ Applying recipe: {recipe.name}")
-        
+        # print(stack_trace())
+        # print("--------------------------------")
         if self.current_recipe is None:
             # First recipe - apply directly
+            print("Applying recipe directly")
             await self._apply_recipe_direct(recipe)
         else:
             # Transition from current recipe
+            print("Transitioning to recipe")
             await self._transition_to_recipe(recipe, transition_time)
         
         self.current_recipe = recipe

@@ -19,12 +19,15 @@ class LightController:
         self._controller: Optional[PipelineController] = None
         self._recipe_manager: Optional[RecipeManager] = None
         self._render_task: Optional[asyncio.Task] = None
+        self._loop_ready: Optional[threading.Event] = None
+
+        # if self.simulation:
+        #     from led_ctrl import mock_neopixel as _mn
+        #     _mn.set_persistent_mode(True)
 
         # If running in simulation with GUI, start persistent GUI in a separate process on the main thread
         if self.simulation and self.persistent_gui:
             try:
-                from led_ctrl import mock_neopixel as _mn
-                _mn.set_persistent_mode(True)
                 self._gui_process = multiprocessing.Process(
                     target=_mn.start_persistent_gui,
                     args=(self.num_pixels, False),
@@ -36,18 +39,42 @@ class LightController:
                 # Fall back silently; background runtime may still run headless
                 self._gui_process = None
 
+        import time
+        time.sleep(1)
         self._start_background_runtime()
 
     # Public API
+    def wait_until_ready(self, timeout_seconds: float = 5.0) -> bool:
+        """Block until the background loop and recipe manager are ready."""
+        import time
+        
+        # Wait for the loop to be created and running
+        if self._loop_ready:
+            if not self._loop_ready.wait(timeout_seconds):
+                print("Timeout waiting for event loop to be ready")
+                return False
+        
+        deadline = time.time() + timeout_seconds
+        while time.time() < deadline:
+            if self._loop and self._recipe_manager and self._loop.is_running():
+                return True
+            time.sleep(0.05)
+        
+        print(f"Timeout waiting for ready state. Loop: {bool(self._loop)}, Manager: {bool(self._recipe_manager)}, Running: {self._loop.is_running() if self._loop else False}")
+        return bool(self._loop and self._recipe_manager and self._loop.is_running())
+
     def start_music(self):
         """Start a music-reactive recipe (e.g., pulse to music)."""
+        print("Starting music in LightController")
         def _apply():
+            print("Applying music pulse in LightController")
             return self._recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=1.0)
 
         self._submit_coroutine(_apply)
 
     def stop_music(self):
         """Switch to a calm breathing-style recipe."""
+        print("Stopping music in LightController")
         def _apply():
             return self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=1.0)
 
@@ -97,6 +124,7 @@ class LightController:
     # Internal helpers
     def _start_background_runtime(self):
         # Create controller and start it on the main thread (not inside the background thread)
+        print("Starting background runtime in LightController")
         self._controller = PipelineController(self.num_pixels, force_simulation=self.simulation)
         try:
             asyncio.run(self._controller.start())
@@ -110,6 +138,9 @@ class LightController:
 
         # Create recipe manager on the main thread as well
         self._recipe_manager = RecipeManager(self._controller)
+        
+        # Add an event to signal when the loop is ready
+        self._loop_ready = threading.Event()
 
         # Spawn background thread only for the long-running render loop and async recipe application
         def _runner():
@@ -118,9 +149,14 @@ class LightController:
 
             async def _run():
                 # Start render loop
+                print("Starting render loop")
                 self._render_task = asyncio.create_task(self._controller.run_loop())
+                # Signal that the loop is ready
+                self._loop_ready.set()
+                print("Event loop is ready and running")
                 # Apply initial calm recipe
-                await self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=0)
+                # print("Applying initial calm recipe")
+                # await self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=0)
 
             self._loop.run_until_complete(_run())
             try:
@@ -136,8 +172,15 @@ class LightController:
 
     def _submit_coroutine(self, coro_factory):
         if not self._loop or not self._recipe_manager:
+            print("No loop or recipe manager")
             return
+        
+        if not self._loop.is_running():
+            print("Event loop is not running")
+            return
+            
         try:
             asyncio.run_coroutine_threadsafe(coro_factory(), self._loop)
-        except Exception:
+        except Exception as e:
+            print(f"Error submitting coroutine: {e}")
             pass

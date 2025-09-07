@@ -3,7 +3,15 @@
 Start persistent GUI server for LED visualization
 """
 import argparse
-from mock_neopixel import start_persistent_gui
+try:
+    # Prefer package-relative import when executed as a module
+    from .mock_neopixel import start_persistent_gui
+except ImportError:
+    # Fallback to support direct script execution (adds this dir to sys.path)
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from mock_neopixel import start_persistent_gui
 
 def main():
     parser = argparse.ArgumentParser(description='Start persistent LED GUI')

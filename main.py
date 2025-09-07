@@ -1,5 +1,6 @@
 from sound_controller import SoundController
 from light_controller import LightController
+from state_manager import StateManager
 from rfid_reader import RFIDReader, OperatingMode
 import sys
 import platform
@@ -42,9 +43,10 @@ def get_all_songs():
 
 
 class RFIDHandler:
-    def __init__(self, sound_controller, light_controller, code_to_song, all_songs):
+    def __init__(self, sound_controller, light_controller, code_to_song, all_songs, state_manager: StateManager):
         self.sound = sound_controller
         self.light = light_controller
+        self.state = state_manager
         self.code_to_song = code_to_song
         self.all_songs = all_songs
         self.recent_codes = deque()  # Store recent codes with timestamps
@@ -69,7 +71,7 @@ class RFIDHandler:
                 if self.all_songs:
                     random_song = random.choice(self.all_songs)
                     print(f"Dual chip detected! Playing random song: {random_song}")
-                    self.sound.play_song(random_song)
+                    self.state.start_song(random_song)
                 else:
                     print("No songs available for random selection")
                 
@@ -98,7 +100,7 @@ class RFIDHandler:
                     print(f"No song mapped for code: {code}")
                     return
                 print(f"Single chip confirmed. Playing mapped song: {song_file}")
-                self.sound.play_song(song_file)
+                self.state.start_song(song_file)
 
 
 def _detect_operating_mode() -> OperatingMode:
@@ -125,14 +127,22 @@ def _detect_operating_mode() -> OperatingMode:
 
 def main():
     sound = SoundController(SONGS_DIR)
-    light = LightController(simulation=True, persistent_gui=True)
+    light = LightController(simulation=True, persistent_gui=False)
+    state = StateManager(sound, light)
     mode = _detect_operating_mode()
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)
     all_songs = get_all_songs()
     
     # Create the RFID handler
-    handler = RFIDHandler(sound, light, code_to_song, all_songs)
+    handler = RFIDHandler(sound, light, code_to_song, all_songs, state)
+
+    # Ensure idle state on startup after light controller is ready
+    try:
+        light.wait_until_ready(5.0)
+    except Exception:
+        pass
+    state.go_idle()
 
     print(f"Operating mode: {mode.value}")
     print("Ready for RFID scans. Scan a tag to play a song.")

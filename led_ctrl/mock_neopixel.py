@@ -155,6 +155,7 @@ class PersistentGUI:
             buffer = ""
             while True:
                 data = client.recv(1024)
+                print(f"Received data: {data}")
                 if not data:
                     break
                 
@@ -232,6 +233,7 @@ class MockNeoPixel:
     """Mock NeoPixel class that can connect to persistent GUI or create its own"""
     
     def __init__(self, pin, num_pixels: int, brightness: float = 1.0, auto_write: bool = True):
+        print("MockNeoPixel initialized")
         self.num_pixels = num_pixels
         self.brightness = brightness
         self.auto_write = auto_write
@@ -250,6 +252,7 @@ class MockNeoPixel:
     
     def _connect_to_persistent_gui(self):
         """Connect to persistent GUI via socket"""
+        print("Connecting to persistent GUI")
         self.client_socket = None
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -261,6 +264,7 @@ class MockNeoPixel:
     
     def _create_own_gui(self):
         """Create own GUI window (original behavior)"""
+        print("Creating own GUI")
         self.client_socket = None
         self.root = tk.Tk()
         self.root.title(f"LED Simulator - {self.num_pixels} pixels")
@@ -351,6 +355,26 @@ class MockNeoPixel:
         # Add text
         self.canvas.create_text(10, 10, text=f"LEDs 0-{self.num_pixels-1} ({self.num_pixels} pixels)", 
                                fill='white', anchor='nw')
+        
+        # Start the GUI in a way that doesn't block
+        self._start_non_blocking_gui()
+    
+    def _start_non_blocking_gui(self):
+        """Start GUI updates without blocking the main thread"""
+        # Use after() to process GUI events periodically
+        self._process_gui_events()
+    
+    def _process_gui_events(self):
+        """Process GUI events periodically to keep the window responsive"""
+        if not self._closed and hasattr(self, 'root'):
+            try:
+                # Process pending events
+                self.root.update_idletasks()
+                # Schedule next update
+                self.root.after(16, self._process_gui_events)  # ~60 FPS
+            except tk.TclError:
+                # Window was destroyed
+                self._closed = True
     
     def __setitem__(self, index: int, color: Tuple[int, int, int]):
         """Set pixel color"""
@@ -391,11 +415,14 @@ class MockNeoPixel:
             except:
                 pass
         else:
-            # Update own GUI
-            r, g, b = color
-            hex_color = f"#{r:02x}{g:02x}{b:02x}"
-            self.canvas.itemconfig(self.circles[index], fill=hex_color)
-            self.root.update_idletasks()
+            # Update own GUI using thread-safe method
+            def update_gui():
+                r, g, b = color
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                self.canvas.itemconfig(self.circles[index], fill=hex_color)
+            
+            # Use root.after() for thread-safe GUI updates
+            self.root.after(0, update_gui)
     
     def show(self):
         """Update all pixels"""

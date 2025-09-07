@@ -477,6 +477,7 @@ def create_red_pink_flash_program() -> Program:
 
 # Example usage
 async def main():
+    print("Running LED controller demo")
     import argparse
     
     parser = argparse.ArgumentParser(description='LED Controller Demo')
