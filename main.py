@@ -125,7 +125,7 @@ def _detect_operating_mode() -> OperatingMode:
 
 def main():
     sound = SoundController(SONGS_DIR)
-    light = LightController()
+    light = LightController(simulation=True, persistent_gui=True)
     mode = _detect_operating_mode()
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)

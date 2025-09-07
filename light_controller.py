@@ -96,21 +96,33 @@ class LightController:
 
     # Internal helpers
     def _start_background_runtime(self):
+        # Create controller and start it on the main thread (not inside the background thread)
+        self._controller = PipelineController(self.num_pixels, force_simulation=self.simulation)
+        try:
+            asyncio.run(self._controller.start())
+        except RuntimeError:
+            # Fallback if an event loop is already running on the main thread
+            temp_loop = asyncio.new_event_loop()
+            try:
+                temp_loop.run_until_complete(self._controller.start())
+            finally:
+                temp_loop.close()
+
+        # Create recipe manager on the main thread as well
+        self._recipe_manager = RecipeManager(self._controller)
+
+        # Spawn background thread only for the long-running render loop and async recipe application
         def _runner():
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
 
-            async def _start():
-                self._controller = PipelineController(self.num_pixels, force_simulation=self.simulation)
-                # Optional persistent GUI setup is handled inside led_ctrl when enabled globally
-                await self._controller.start()
-                self._recipe_manager = RecipeManager(self._controller)
+            async def _run():
+                # Start render loop
                 self._render_task = asyncio.create_task(self._controller.run_loop())
-
-                # Start with a neutral calm state
+                # Apply initial calm recipe
                 await self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=0)
 
-            self._loop.run_until_complete(_start())
+            self._loop.run_until_complete(_run())
             try:
                 self._loop.run_forever()
             finally:
