@@ -148,21 +148,42 @@ def main():
     print("Ready for RFID scans. Scan a tag to play a song.")
     print("Scan two tags within 5 seconds for a random song!")
     
-    # Use continuous mode on Raspberry Pi; otherwise read line-by-line from stdin
-    if mode == OperatingMode.RASPBERRY_PI:
+    # Get the GUI instance for main thread control
+    gui_instance = light.get_gui_instance()
+    
+    # Start RFID reading in a background thread
+    def rfid_worker():
+        if mode == OperatingMode.RASPBERRY_PI:
+            try:
+                rfid.start_continuous_reading(handler.handle_rfid_code)
+            except KeyboardInterrupt:
+                print("\nShutting down...")
+                rfid.stop_continuous_reading()
+        else:
+            try:
+                while True:
+                    code = rfid.get_next_code()
+                    if code is None:
+                        break
+                    if code:
+                        handler.handle_rfid_code(code)
+            except KeyboardInterrupt:
+                print("\nShutting down...")
+    
+    # Start RFID reading in background thread
+    rfid_thread = threading.Thread(target=rfid_worker, daemon=True)
+    rfid_thread.start()
+    
+    # Start GUI mainloop in main thread
+    if gui_instance:
         try:
-            rfid.start_continuous_reading(handler.handle_rfid_code)
+            gui_instance.start_mainloop()
         except KeyboardInterrupt:
             print("\nShutting down...")
-            rfid.stop_continuous_reading()
     else:
+        # If no GUI, just wait for the RFID thread
         try:
-            while True:
-                code = rfid.get_next_code()
-                if code is None:
-                    break
-                if code:
-                    handler.handle_rfid_code(code)
+            rfid_thread.join()
         except KeyboardInterrupt:
             print("\nShutting down...")
 

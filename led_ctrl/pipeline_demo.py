@@ -932,7 +932,7 @@ class PipelineController:
         """Main rendering loop"""
         print("Running pipeline loop")
         while self.running:
-            print("run_loop op")
+            # print("run_loop op")
             elapsed = time.time() - self.start_time
             
             # Render frame through pipeline
@@ -943,7 +943,7 @@ class PipelineController:
                 self.pixels[i] = (color.r, color.g, color.b)
             self.pixels.show()
             
-            SLEEP_RATE = 1/4 # was 1/60 at start
+            SLEEP_RATE = 1/60 # was 1/60 at start
             # 60 FPS
             await asyncio.sleep(SLEEP_RATE)
     

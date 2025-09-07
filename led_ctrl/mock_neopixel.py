@@ -240,6 +240,7 @@ class MockNeoPixel:
         self._pixels = [(0, 0, 0)] * num_pixels
         self._closed = False
         self._dirty = False  # Track if pixels have changed
+        self._gui_created = False
         
         global _persistent_gui, _persistent_mode
         
@@ -247,8 +248,16 @@ class MockNeoPixel:
             # Try to connect to persistent GUI
             self._connect_to_persistent_gui()
         else:
-            # Create own GUI (original behavior)
-            self._create_own_gui()
+            # Don't create GUI immediately - will be created when needed
+            self._setup_gui_creation()
+    
+    def _setup_gui_creation(self):
+        """Setup for GUI creation - will be created when mainloop is started"""
+        print("Setting up for GUI creation")
+        self.client_socket = None
+        self.root = None
+        self.canvas = None
+        self.circles = []
     
     def _connect_to_persistent_gui(self):
         """Connect to persistent GUI via socket"""
@@ -260,7 +269,25 @@ class MockNeoPixel:
             print("🖥️ Connected to persistent GUI")
         except:
             print("🖥️ No persistent GUI found, creating new one...")
-            self._create_own_gui()
+            self._setup_gui_creation()
+    
+    def create_gui(self):
+        """Create the GUI - must be called from main thread"""
+        if self._gui_created:
+            return
+        
+        print("Creating GUI from main thread")
+        self._create_own_gui()
+        self._gui_created = True
+    
+    def start_mainloop(self):
+        """Start the GUI mainloop - must be called from main thread"""
+        if not self._gui_created:
+            self.create_gui()
+        
+        if hasattr(self, 'root') and not self._closed:
+            print("Starting GUI mainloop")
+            self.root.mainloop()
     
     def _create_own_gui(self):
         """Create own GUI window (original behavior)"""
@@ -355,26 +382,6 @@ class MockNeoPixel:
         # Add text
         self.canvas.create_text(10, 10, text=f"LEDs 0-{self.num_pixels-1} ({self.num_pixels} pixels)", 
                                fill='white', anchor='nw')
-        
-        # Start the GUI in a way that doesn't block
-        self._start_non_blocking_gui()
-    
-    def _start_non_blocking_gui(self):
-        """Start GUI updates without blocking the main thread"""
-        # Use after() to process GUI events periodically
-        self._process_gui_events()
-    
-    def _process_gui_events(self):
-        """Process GUI events periodically to keep the window responsive"""
-        if not self._closed and hasattr(self, 'root'):
-            try:
-                # Process pending events
-                self.root.update_idletasks()
-                # Schedule next update
-                self.root.after(16, self._process_gui_events)  # ~60 FPS
-            except tk.TclError:
-                # Window was destroyed
-                self._closed = True
     
     def __setitem__(self, index: int, color: Tuple[int, int, int]):
         """Set pixel color"""
@@ -414,12 +421,13 @@ class MockNeoPixel:
                 self.client_socket.send(message.encode())
             except:
                 pass
-        else:
+        elif hasattr(self, 'root') and self.root and hasattr(self, 'canvas') and self.canvas:
             # Update own GUI using thread-safe method
             def update_gui():
-                r, g, b = color
-                hex_color = f"#{r:02x}{g:02x}{b:02x}"
-                self.canvas.itemconfig(self.circles[index], fill=hex_color)
+                if not self._closed and hasattr(self, 'canvas') and hasattr(self, 'circles') and index < len(self.circles):
+                    r, g, b = color
+                    hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                    self.canvas.itemconfig(self.circles[index], fill=hex_color)
             
             # Use root.after() for thread-safe GUI updates
             self.root.after(0, update_gui)
@@ -438,10 +446,10 @@ class MockNeoPixel:
                 self.client_socket.send(message.encode())
             except:
                 pass
-        else:
+        elif hasattr(self, 'root') and self.root:
             for i, color in enumerate(self._pixels):
                 self._update_pixel(i, color)
-            self.root.update()
+            # Don't call root.update() here as it might block
     
     def fill(self, color: Tuple[int, int, int]):
         """Fill all pixels with the same color"""

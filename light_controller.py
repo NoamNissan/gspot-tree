@@ -21,13 +21,10 @@ class LightController:
         self._render_task: Optional[asyncio.Task] = None
         self._loop_ready: Optional[threading.Event] = None
 
-        # if self.simulation:
-        #     from led_ctrl import mock_neopixel as _mn
-        #     _mn.set_persistent_mode(True)
-
-        # If running in simulation with GUI, start persistent GUI in a separate process on the main thread
+        # If running in simulation with GUI, start persistent GUI in a separate process
         if self.simulation and self.persistent_gui:
             try:
+                from led_ctrl import mock_neopixel as _mn
                 self._gui_process = multiprocessing.Process(
                     target=_mn.start_persistent_gui,
                     args=(self.num_pixels, False),
@@ -39,8 +36,7 @@ class LightController:
                 # Fall back silently; background runtime may still run headless
                 self._gui_process = None
 
-        import time
-        time.sleep(1)
+        # Start background runtime in a separate thread
         self._start_background_runtime()
 
     # Public API
@@ -68,7 +64,7 @@ class LightController:
         print("Starting music in LightController")
         def _apply():
             print("Applying music pulse in LightController")
-            return self._recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=1.0)
+            return self._recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=1.0)
 
         self._submit_coroutine(_apply)
 
@@ -184,3 +180,9 @@ class LightController:
         except Exception as e:
             print(f"Error submitting coroutine: {e}")
             pass
+    
+    def get_gui_instance(self):
+        """Get the MockNeoPixel GUI instance for main thread control"""
+        if self.simulation and self._controller and hasattr(self._controller, 'pixels'):
+            return self._controller.pixels
+        return None
