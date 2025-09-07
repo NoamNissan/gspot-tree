@@ -12,12 +12,12 @@ import threading
 import time
 import socket
 import json
-from led_controller import Color
+from .led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
 
-from constants import PERSISTENT_GUI_PORT
-from pipeline_demo import (
+from .constants import PERSISTENT_GUI_PORT
+from .pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
@@ -59,10 +59,10 @@ class RealTimeAudioProvider:
         self.running = False
         
         # Pre-calculate frequency bin indices for proper musical ranges
-        self.bass_bins = slice(0, int(250 * block_size / sample_rate))     # 0-250Hz (musical bass)
-        self.mid_bins = slice(int(250 * block_size / sample_rate), 
-                             int(4000 * block_size / sample_rate))          # 250-4000Hz (vocals, instruments)
-        self.high_bins = slice(int(4000 * block_size / sample_rate), 
+        self.bass_bins = slice(0, int(250 * block_size / self.sample_rate))     # 0-250Hz (musical bass)
+        self.mid_bins = slice(int(250 * block_size / self.sample_rate), 
+                             int(4000 * block_size / self.sample_rate))          # 250-4000Hz (vocals, instruments)
+        self.high_bins = slice(int(4000 * block_size / self.sample_rate), 
                               block_size // 2)                              # 4000Hz+ (cymbals, harmonics)
     
     def audio_callback(self, indata, frames, time, status):
@@ -512,7 +512,7 @@ class SpectrumEffect(Effect):
     """LedFx-style spectrum analyzer effect"""
     
     def __init__(self, num_leds: int, color: Color = Color(0, 0, 255), **kwargs):
-        from pipeline_demo import Effect as PipelineEffect
+        from .pipeline_demo import Effect as PipelineEffect
         PipelineEffect.__init__(self)
         self.num_leds = num_leds
         self.color = color
@@ -520,7 +520,7 @@ class SpectrumEffect(Effect):
         self.band_width = num_leds // self.num_bands
         
     def _apply_effect(self, colors, elapsed: float):
-        from led_controller import Color
+        from .led_controller import Color
         import colorsys
         
         result = [Color(0, 0, 0)] * len(colors)
@@ -547,12 +547,12 @@ class EnergyEffect(Effect):
     """LedFx-style energy effect"""
     
     def __init__(self, num_leds: int, **kwargs):
-        from pipeline_demo import Effect as PipelineEffect
+        from .pipeline_demo import Effect as PipelineEffect
         PipelineEffect.__init__(self)
         self.num_leds = num_leds
         
     def _apply_effect(self, colors, elapsed: float):
-        from led_controller import Color
+        from .led_controller import Color
         import time
         
         # Simulate energy levels
@@ -583,12 +583,12 @@ class WavelengthEffect(Effect):
     """LedFx-style wavelength effect"""
     
     def __init__(self, num_leds: int, **kwargs):
-        from pipeline_demo import Effect as PipelineEffect
+        from .pipeline_demo import Effect as PipelineEffect
         PipelineEffect.__init__(self)
         self.num_leds = num_leds
         
     def _apply_effect(self, colors, elapsed: float):
-        from led_controller import Color
+        from .led_controller import Color
         import colorsys
         
         result = []
@@ -612,7 +612,7 @@ class ScrollEffect(Effect):
     """LedFx-style scroll effect"""
     
     def __init__(self, num_leds: int, **kwargs):
-        from pipeline_demo import Effect as PipelineEffect
+        from .pipeline_demo import Effect as PipelineEffect
         PipelineEffect.__init__(self)
         self.num_leds = num_leds
         self.pattern_length = 20
@@ -626,7 +626,7 @@ class ScrollEffect(Effect):
             self.pattern.append((int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
             
     def _apply_effect(self, colors, elapsed: float):
-        from led_controller import Color
+        from .led_controller import Color
         import time
         
         # Scroll speed
@@ -645,14 +645,14 @@ class BarsEffect(Effect):
     """LedFx-style bars effect"""
     
     def __init__(self, num_leds: int, **kwargs):
-        from pipeline_demo import Effect as PipelineEffect
+        from .pipeline_demo import Effect as PipelineEffect
         PipelineEffect.__init__(self)
         self.num_leds = num_leds
         self.num_bars = 10
         self.bar_width = num_leds // self.num_bars
         
     def _apply_effect(self, colors, elapsed: float):
-        from led_controller import Color
+        from .led_controller import Color
         import colorsys
         
         result = [Color(0, 0, 0)] * len(colors)
@@ -1364,7 +1364,7 @@ async def main():
     
     # Enable persistent GUI mode if requested
     if args.persistent_gui:
-        import mock_neopixel
+        from . import mock_neopixel
         mock_neopixel.set_persistent_mode(True)
         print(f"  GUI: Persistent mode enabled")
     

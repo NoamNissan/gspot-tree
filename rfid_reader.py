@@ -10,11 +10,13 @@ class OperatingMode(Enum):
     """Enumeration for RFID reader operating modes."""
     LINUX = "linux"
     RASPBERRY_PI = "raspberry_pi"
+    MACOS = "macos"
 
 class RFIDReader:
     """
-    RFID Reader that supports two modes:
+    RFID Reader that supports multiple modes:
     - Linux mode: Reads from standard input
+    - macOS mode: Reads from standard input
     - Raspberry Pi mode: Uses RFIDDecoder to read from hardware device
     """
     
@@ -36,7 +38,7 @@ class RFIDReader:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
-        if self.mode == OperatingMode.LINUX:
+        if self.mode in (OperatingMode.LINUX, OperatingMode.MACOS):
             self.input_stream = sys.stdin
             self.rfid_decoder = None
         elif self.mode == OperatingMode.RASPBERRY_PI:
@@ -44,7 +46,9 @@ class RFIDReader:
             # Pass None to auto-detect, or the specified device_path
             self.rfid_decoder = RFIDDecoder(device_path, log_level=logging.DEBUG)
         else:
-            raise ValueError(f"Invalid mode: {mode}. Must be OperatingMode.LINUX or OperatingMode.RASPBERRY_PI")
+            raise ValueError(
+                f"Invalid mode: {mode}. Must be OperatingMode.LINUX, OperatingMode.MACOS, or OperatingMode.RASPBERRY_PI"
+            )
     
     def _signal_handler(self, signum, frame):
         """
@@ -66,7 +70,7 @@ class RFIDReader:
         Returns:
             Optional[str]: The RFID code, or None if interrupted/error
         """
-        if self.mode == OperatingMode.LINUX:
+        if self.mode in (OperatingMode.LINUX, OperatingMode.MACOS):
             try:
                 code = self.input_stream.readline()
                 if self._shutdown_event.is_set():

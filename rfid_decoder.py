@@ -1,4 +1,14 @@
-from evdev import InputDevice, categorize, ecodes, list_devices
+import sys
+try:
+    from evdev import InputDevice, categorize, ecodes, list_devices
+    EVDEV_AVAILABLE = True
+except Exception:
+    # evdev is Linux-only; allow import on macOS/Windows and fail gracefully at runtime
+    EVDEV_AVAILABLE = False
+    InputDevice = None  # type: ignore
+    categorize = None  # type: ignore
+    ecodes = None  # type: ignore
+    list_devices = None  # type: ignore
 import time
 import logging
 import signal
@@ -23,6 +33,10 @@ def find_rfid_device(target_description: str = "HID 5131:2007") -> Optional[str]
         Optional[str]: Path to the device if found, None otherwise
     """
     logger = logging.getLogger('RFIDDeviceFinder')
+
+    if not EVDEV_AVAILABLE:
+        logger.warning("evdev is not available on this platform (%s). RFID reader is disabled.", sys.platform)
+        return None
     
     try:
         devices = list_devices()
@@ -79,6 +93,12 @@ class RFIDDecoder:
         self.logger = logging.getLogger('RFIDDecoder')
         self.logger.setLevel(log_level)
         
+        if not EVDEV_AVAILABLE:
+            raise RuntimeError(
+                "RFID reader requires 'evdev', which is only available on Linux. "
+                f"Current platform: {sys.platform}. Run on a Linux device (e.g., Raspberry Pi)."
+            )
+
         # Auto-detect device if not provided
         if device_path is None:
             self.logger.info("No device path provided, auto-detecting RFID device...")

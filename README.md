@@ -6,6 +6,7 @@ This project is designed to run on a Raspberry Pi and orchestrate sound and ligh
 - Waits for RFID events (keyboard input)
 - Matches RFID codes to song files using a CSV mapping file
 - Plays songs through the audio controller
+- **NEW: Dual RFID chip detection** - Scan two different RFID chips within 5 seconds to trigger a random song from the song library
 - Light controller stub (no-op for now)
 
 ## Hardware
@@ -26,6 +27,20 @@ This project is designed to run on a Raspberry Pi and orchestrate sound and ligh
    Each line should contain an RFID code and the corresponding song filename, separated by a comma.
 3. Run the main script: `python3 main.py`
 4. Scan an RFID tag to play the corresponding song.
+
+## Dual RFID Chip Feature
+The system now supports a special dual-chip mode:
+- **Single chip scan**: Plays the mapped song for that RFID code (after waiting 5 seconds to see if a second chip comes)
+- **Dual chip scan**: If two different RFID chips are scanned within 5 seconds, the system plays a random song from the entire song library
+- **Timing window**: The system waits 5 seconds after the first chip to see if a second chip is scanned
+
+This feature adds an element of surprise and variety to the music selection, making the experience more interactive and fun.
+
+## Testing
+Run the test script to verify the dual RFID chip functionality:
+```bash
+python3 test_dual_rfid.py
+```
 
 ## Requirements
 See `requirements.txt` for dependencies.

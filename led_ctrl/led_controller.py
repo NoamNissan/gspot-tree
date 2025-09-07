@@ -17,7 +17,7 @@ try:
     SIMULATION_MODE = False
 except ImportError:
     # Import mock modules
-    from mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
+    from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
     SIMULATION_MODE = True
 

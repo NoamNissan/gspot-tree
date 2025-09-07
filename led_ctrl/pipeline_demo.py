@@ -13,7 +13,7 @@ import numpy as np
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
-from led_controller import Color
+from .led_controller import Color
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -903,7 +903,7 @@ class PipelineController:
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
-            import mock_neopixel  # This will monkey patch neopixel module
+            from . import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
         else:
             print("Using real LED hardware")

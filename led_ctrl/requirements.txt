@@ -6,7 +6,8 @@ sounddevice>=0.4.0
 asyncio-mqtt>=0.11.0
 
 # GUI simulation (optional)
-tkinter  # Usually included with Python
+# Tkinter is part of the standard library and not installable via pip.
+# It is usually included with Python; if missing, install via OS package manager.
 
 # Hardware support (Raspberry Pi only)
 # Uncomment for real LED hardware:
