@@ -19,6 +19,7 @@ except ImportError:
     # Import mock modules
     from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
+    print('in force simulatino mode')
     SIMULATION_MODE = True
 
 class TransitionType(Enum):

@@ -2,6 +2,7 @@ from sound_controller import SoundController
 from light_controller import LightController
 from state_manager import StateManager
 from rfid_reader import RFIDReader, OperatingMode
+import argparse
 import sys
 import platform
 import os
@@ -134,8 +135,16 @@ def _detect_operating_mode() -> OperatingMode:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="GSpot Tree main controller")
+    parser.add_argument("--simulation", dest="simulation", action="store_true", help="Run LED controller in simulation mode")
+    parser.add_argument("--no-simulation", dest="simulation", action="store_false", help="Disable simulation mode")
+    parser.add_argument("--persistent-gui", dest="persistent_gui", action="store_true", help="Keep mock LED GUI open persistently (simulation only)")
+    parser.add_argument("--no-persistent-gui", dest="persistent_gui", action="store_false", help="Do not start persistent mock LED GUI")
+    parser.set_defaults(simulation=False, persistent_gui=False)
+    args = parser.parse_args()
+
     sound = SoundController(SONGS_DIR)
-    light = LightController(simulation=True, persistent_gui=False)
+    light = LightController(simulation=args.simulation, persistent_gui=args.persistent_gui)
     state = StateManager(sound, light)
     mode = _detect_operating_mode()
     rfid = RFIDReader(mode=mode)

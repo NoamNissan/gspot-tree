@@ -8,7 +8,12 @@ import socket
 import threading
 import json
 from typing import Tuple, List
-from .constants import PERSISTENT_GUI_PORT
+try:
+    # When imported as part of the package (preferred)
+    from .constants import PERSISTENT_GUI_PORT
+except ImportError:
+    # Fallback when this file is imported as a top-level module
+    from constants import PERSISTENT_GUI_PORT
 
 # Global persistent GUI instance
 _persistent_gui = None
