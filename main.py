@@ -97,17 +97,18 @@ class RFIDHandler:
 
     def _handle_double_chip(self):
         """Handle the case where two chips were detected within the window."""
-        with self.processing_lock:
-            # Dual chip case - pick a random song from DOUBLE_CHIP_DIR
-            double_songs = get_songs_in_directory(DOUBLE_CHIP_DIR)
-            if double_songs:
-                random_song = random.choice(double_songs)
-                print(f"Dual chip detected! Playing random double-chip song: {random_song}")
-                self.state.start_song(random_song)
-            else:
-                print(f"No songs found in {DOUBLE_CHIP_DIR}")
-            # Clear the recent codes after handling
-            self.recent_codes.clear()
+        print("Handling double chip")
+        # Assumes caller holds self.processing_lock
+        # Dual chip case - pick a random song from DOUBLE_CHIP_DIR
+        double_songs = get_songs_in_directory(DOUBLE_CHIP_DIR)
+        if double_songs:
+            random_song = random.choice(double_songs)
+            print(f"Dual chip detected! Playing random double-chip song: {random_song}")
+            self.state.start_song(random_song)
+        else:
+            print(f"No songs found in {DOUBLE_CHIP_DIR}")
+        # Clear the recent codes after handling
+        self.recent_codes.clear()
 
 
 def _detect_operating_mode() -> OperatingMode:

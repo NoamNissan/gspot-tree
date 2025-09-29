@@ -39,7 +39,7 @@ class SoundController:
             print(f"Audio not available - would play: {filename}")
             return
             
-        filepath = os.path.join(self.songs_dir, filename)
+        filepath = filename
         if not os.path.isfile(filepath):
             print(f"Song file not found: {filepath}")
             return
