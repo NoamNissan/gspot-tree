@@ -69,7 +69,9 @@ class RFIDHandler:
             
             # Check if we have two codes within the window
             if len(self.recent_codes) >= 2:
-                self._handle_double_chip()
+                # Only handle double chip if the two most recent codes are different
+                if self.recent_codes[-1][0] != self.recent_codes[-2][0]:
+                    self._handle_double_chip()
                 
             elif len(self.recent_codes) == 1:
                 # Single chip case - wait to see if another comes
