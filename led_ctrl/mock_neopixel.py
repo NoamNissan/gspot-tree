@@ -498,6 +498,8 @@ class MockBoard:
 import sys
 from types import ModuleType
 
+print("MockNeoPixel module loaded")
+
 # Create mock neopixel module
 neopixel_module = ModuleType('neopixel')
 neopixel_module.NeoPixel = MockNeoPixel

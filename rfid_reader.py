@@ -44,7 +44,7 @@ class RFIDReader:
         elif self.mode == OperatingMode.RASPBERRY_PI:
             self.input_stream = None
             # Pass None to auto-detect, or the specified device_path
-            self.rfid_decoder = RFIDDecoder(device_path, log_level=logging.DEBUG)
+            self.rfid_decoder = RFIDDecoder(device_path)
         else:
             raise ValueError(
                 f"Invalid mode: {mode}. Must be OperatingMode.LINUX, OperatingMode.MACOS, or OperatingMode.RASPBERRY_PI"
@@ -61,7 +61,7 @@ class RFIDReader:
         print(f"\nReceived signal {signum}. Shutting down gracefully...")
         self._shutdown_event.set()
         self.stop_continuous_reading()
-        sys.exit(0)
+        # Don't call sys.exit(0) here - let the main program handle shutdown
     
     def get_next_code(self) -> Optional[str]:
         """

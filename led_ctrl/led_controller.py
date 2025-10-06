@@ -16,10 +16,11 @@ try:
     import neopixel
     SIMULATION_MODE = False
 except ImportError:
+    raise ImportError("Neopixel not found")
     # Import mock modules
     from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
-    print('in force simulatino mode')
+    print('in force simulation mode')
     SIMULATION_MODE = True
 
 class TransitionType(Enum):

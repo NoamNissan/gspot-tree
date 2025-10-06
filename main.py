@@ -174,9 +174,14 @@ def main():
             except KeyboardInterrupt:
                 print("\nShutting down...")
                 rfid.stop_continuous_reading()
+            except Exception as e:
+                print(f"Error in RFID worker: {e}")
+                rfid.stop_continuous_reading()
         else:
             try:
                 while True:
+                    if rfid.is_shutdown_requested():
+                        break
                     code = rfid.get_next_code()
                     if code is None:
                         break
@@ -184,6 +189,8 @@ def main():
                         handler.handle_rfid_code(code)
             except KeyboardInterrupt:
                 print("\nShutting down...")
+            except Exception as e:
+                print(f"Error in RFID worker: {e}")
     
     # Start RFID reading in background thread
     rfid_thread = threading.Thread(target=rfid_worker, daemon=True)
@@ -195,12 +202,27 @@ def main():
             gui_instance.start_mainloop()
         except KeyboardInterrupt:
             print("\nShutting down...")
+            rfid.stop_continuous_reading()
     else:
         # If no GUI, just wait for the RFID thread
         try:
-            rfid_thread.join()
+            # Wait for the RFID thread with a timeout to allow for shutdown
+            while rfid_thread.is_alive() and not rfid.is_shutdown_requested():
+                rfid_thread.join(timeout=0.1)  # Check every 100ms
         except KeyboardInterrupt:
             print("\nShutting down...")
+            rfid.stop_continuous_reading()
+            # Wait a bit for threads to finish, but don't block indefinitely
+            try:
+                rfid_thread.join(timeout=2.0)
+            except KeyboardInterrupt:
+                print("Force shutdown...")
+                pass
+    
+    # Check if shutdown was requested and exit
+    if rfid.is_shutdown_requested():
+        print("Shutdown requested, exiting...")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
