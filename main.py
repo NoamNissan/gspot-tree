@@ -162,8 +162,6 @@ def main():
     state.go_idle()
 
     print(f"Operating mode: {mode.value}")
-    print("Ready for RFID scans. Scan a tag to play a song.")
-    print("Scan two tags within 5 seconds for a random song!")
     
     # Get the GUI instance for main thread control
     gui_instance = light.get_gui_instance()
@@ -198,6 +196,9 @@ def main():
     rfid_thread = threading.Thread(target=rfid_worker, daemon=True)
     rfid_thread.start()
     
+    print("Ready for RFID scans. Scan a tag to play a song.")
+    print("Scan two tags within 5 seconds for a random song!")
+
     # Start GUI mainloop in main thread
     if gui_instance:
         try:
