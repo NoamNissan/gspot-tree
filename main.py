@@ -10,6 +10,7 @@ import csv
 import time
 import random
 import threading
+import subprocess
 from collections import deque
 
 SONGS_DIR = "songs"
@@ -114,6 +115,36 @@ class RFIDHandler:
         self.recent_codes.clear()
 
 
+def check_sudo_permission():
+    """Check if the process can run sudo commands."""
+    try:
+        # Try to run sudo with -n flag (non-interactive) to check if passwordless sudo is available
+        result = subprocess.run(['sudo', '-n', 'true'], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def setup_memory_permissions():
+    """Execute sudo chmod 0666 /dev/mem to set proper permissions."""
+    try:
+        print("Setting up memory permissions...")
+        result = subprocess.run(['sudo', 'chmod', '0666', '/dev/mem'], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print("Memory permissions set successfully.")
+            return True
+        else:
+            print(f"Failed to set memory permissions: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        print("Timeout while setting memory permissions.")
+        return False
+    except Exception as e:
+        print(f"Error setting memory permissions: {e}")
+        return False
+
+
 def _detect_operating_mode() -> OperatingMode:
     """Detect the operating mode based on the current OS/hardware."""
     try:
@@ -137,6 +168,17 @@ def _detect_operating_mode() -> OperatingMode:
 
 
 def main():
+    # Check sudo permissions and setup memory permissions first
+    print("Checking system permissions...")
+    if not check_sudo_permission():
+        print("Warning: Sudo permission not available. Some features may not work properly.")
+        print("Please ensure this process can run sudo commands or run with appropriate permissions.")
+    else:
+        print("Sudo permission confirmed.")
+        # Execute the chmod command to set memory permissions
+        if not setup_memory_permissions():
+            print("Warning: Failed to set memory permissions. Hardware access may be limited.")
+    
     parser = argparse.ArgumentParser(description="GSpot Tree main controller")
     parser.add_argument("--simulation", dest="simulation", action="store_true", help="Run LED controller in simulation mode")
     parser.add_argument("--no-simulation", dest="simulation", action="store_false", help="Disable simulation mode")
