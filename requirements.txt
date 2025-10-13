@@ -1,2 +1,6 @@
 pygame>=2.0.0
 evdev>=1.6.0; sys_platform == "linux"
+numpy>=1.24.0
+sounddevice>=0.4.6
+adafruit-blinka>=8.0.0; sys_platform == "linux"
+adafruit-circuitpython-neopixel>=6.3.3; sys_platform == "linux"
