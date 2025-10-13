@@ -132,7 +132,7 @@ class RealTimeAudioProvider:
                 name = device['name'].lower()
                 if device['max_input_channels'] > 0:
                     # macOS system audio devices
-                    if any(keyword in name for keyword in ['blackhole', 'soundflower', 'loopback']):
+                    if any(keyword in name for keyword in ['pulse','blackhole', 'soundflower', 'loopback']):#'pulse', 
                         input_device = i
                         print(f"🎵 Found system audio device: {device['name']}")
                         break

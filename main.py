@@ -145,10 +145,10 @@ def main():
     parser.set_defaults(simulation=False, persistent_gui=False)
     args = parser.parse_args()
 
-    sound = SoundController(SONGS_DIR)
+    mode = _detect_operating_mode()
+    sound = SoundController(SONGS_DIR, mode=mode)
     light = LightController(simulation=args.simulation, persistent_gui=args.persistent_gui)
     state = StateManager(sound, light)
-    mode = _detect_operating_mode()
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)
     # Create the RFID handler
