@@ -14,6 +14,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
 from .led_controller import Color
+from .constants import NEOPIXEL_AUTO_WRITE
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -912,7 +913,7 @@ class PipelineController:
         import neopixel
         import board
         
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=True)
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=NEOPIXEL_AUTO_WRITE)
         self.running = False
         self.start_time = 0
     
@@ -932,7 +933,6 @@ class PipelineController:
         """Main rendering loop"""
         print("Running pipeline loop")
         while self.running:
-            # print("run_loop op")
             elapsed = time.time() - self.start_time
             
             # Render frame through pipeline
@@ -940,7 +940,8 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                self.pixels[i] = (color.r, color.g, color.b)
+                # self.pixels[i] = (color.r, color.g, color.b)
+                self.pixels[i] = (color.g, color.r, color.b)
             self.pixels.show()
             
             SLEEP_RATE = 1/60 # was 1/60 at start

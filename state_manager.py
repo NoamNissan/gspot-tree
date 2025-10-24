@@ -1,6 +1,7 @@
 from enum import Enum
 from threading import RLock
 from typing import Optional
+from constants import ChipType
 
 
 class SystemState(Enum):
@@ -30,23 +31,23 @@ class StateManager:
         with self._lock:
             return self._state
 
-    def start_song(self, song_filename: str) -> None:
+    def start_song(self, song_filename: str, chip_type: ChipType = ChipType.SINGLE) -> None:
         with self._lock:
-            print(f"StateManager.start_song called: song='{song_filename}'")
+            print(f"StateManager.start_song called: song='{song_filename}', chip_type='{chip_type}'")
             # If already playing something else, stop first
             if self._state == SystemState.PLAYING:
                 print("A song is already playing. Stopping current song before starting new one.")
                 self._unsafe_stop_audio()
             try:
-                print("Switching lights to music mode")
-                self.light.start_music()
+                print(f"Switching lights to music mode for {chip_type} chip")
+                self.light.start_music(chip_type)
             except Exception:
                 # Light failures should not prevent audio
                 print("Warning: Failed to switch lights to music mode")
                 pass
             try:
                 print(f"Starting audio playback: {song_filename}")
-                self.sound.play_song(song_filename)
+                self.sound.play_song(song_filename, chip_type)
             finally:
                 # If play blocks until completion, ensure we go idle afterwards
                 self._current_song = song_filename

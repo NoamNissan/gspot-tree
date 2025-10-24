@@ -86,7 +86,7 @@ class RealTimeAudioProvider:
             # Much gentler scaling for music - use logarithmic scaling
             # Music has sustained high levels, need more dynamic range
             bass_scale = 0.05   # Very gentle scaling
-            mid_scale = 0.1     # Gentle scaling  
+            mid_scale = 0.5     # Gentle scaling  
             high_scale = 0.2    # Moderate scaling
             
             # Apply logarithmic scaling for better music dynamics
@@ -795,7 +795,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "bass_boost": 2.0})
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 5, "bass_boost": 0.1})
         ]
     ),
     
@@ -808,7 +808,7 @@ RECIPES = {
             speed=0.2
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0})  # Much lower sensitivity
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 0.02})  # Much lower sensitivity
         ]
     ),
     

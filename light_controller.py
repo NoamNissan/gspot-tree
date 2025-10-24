@@ -5,6 +5,7 @@ from typing import Optional
 
 # Integrate with LED controller stack
 from led_ctrl.led_orchestrator import PipelineController, RecipeManager, RECIPES
+from constants import ChipType
 
 
 class LightController:
@@ -21,6 +22,7 @@ class LightController:
         self._render_task: Optional[asyncio.Task] = None
         self._loop_ready: Optional[threading.Event] = None
 
+        print(f'Initiating light controller with {num_pixels} pixels')
         # If running in simulation with GUI, start persistent GUI in a separate process
         if self.simulation and self.persistent_gui:
             try:
@@ -59,12 +61,16 @@ class LightController:
         print(f"Timeout waiting for ready state. Loop: {bool(self._loop)}, Manager: {bool(self._recipe_manager)}, Running: {self._loop.is_running() if self._loop else False}")
         return bool(self._loop and self._recipe_manager and self._loop.is_running())
 
-    def start_music(self):
+    def start_music(self, chip_type: ChipType = ChipType.SINGLE):
         """Start a music-reactive recipe (e.g., pulse to music)."""
-        print("Starting music in LightController")
+        print(f"Starting music in LightController for {chip_type} chip")
         def _apply():
-            print("Applying music pulse in LightController")
-            return self._recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=1.0)
+            if chip_type == ChipType.DOUBLE:
+                print(f"Applying music pulse recipe for {chip_type} chip")
+                return self._recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=1.0)
+            else:
+                print(f"Applying music spectrum recipe for {chip_type} chip")
+                return self._recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=1.0)
 
         self._submit_coroutine(_apply)
 

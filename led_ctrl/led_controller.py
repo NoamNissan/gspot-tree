@@ -6,6 +6,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Callable, Dict, Any
 import colorsys
+import datetime
 
 # Configuration
 BREATHING_MIN_INTENSITY = 0.2  # Minimum intensity for breathing animation (0.0 = fully off, 1.0 = full brightness)
@@ -146,6 +147,7 @@ class LEDController:
                           program: Program, 
                           transition: TransitionType) -> None:
         """Run a program with animations and transitions"""
+        print(f'running program {program.animations[0].animation_type.value} {datetime.datetime.now().isoformat()}')
         
         animation_index = 0
         
@@ -171,7 +173,7 @@ class LEDController:
                                next_animation: Optional[Animation],
                                transition: TransitionType) -> None:
         """Execute a single animation"""
-        
+
         start_time = time.time()
         
         while time.time() - start_time < animation.duration and self.running:
@@ -196,7 +198,7 @@ class LEDController:
             for i, color in enumerate(animation_colors):
                 if i < len(self.pixels):
                     self.pixels[i] = color.to_tuple()
-            
+        
             self.pixels.show()
             await asyncio.sleep(1/60)  # 60 FPS
     

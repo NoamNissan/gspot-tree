@@ -3,6 +3,7 @@ import os
 import sys
 import subprocess
 from rfid_reader import OperatingMode
+from constants import ChipType
 
 class SoundController:
     def __init__(self, songs_dir="songs", mode: OperatingMode | None = None):
@@ -124,9 +125,9 @@ class SoundController:
         except Exception as e:
             print(f"Failed to configure Raspberry Pi PulseAudio loopback: {e}")
 
-    def play_song(self, filename):
+    def play_song(self, filename, chip_type: ChipType = ChipType.SINGLE):
         if not self.audio_available:
-            print(f"Audio not available - would play: {filename}")
+            print(f"Audio not available - would play: {filename} (chip_type: {chip_type})")
             return
             
         filepath = filename
@@ -137,7 +138,7 @@ class SoundController:
             self._is_stopped = False
             pygame.mixer.music.load(filepath)
             pygame.mixer.music.play()
-            print(f"Playing: {filename}")
+            print(f"Playing: {filename} (chip_type: {chip_type})")
             while pygame.mixer.music.get_busy() and not self._is_stopped:
                 pygame.time.Clock().tick(10)
         except Exception as e:

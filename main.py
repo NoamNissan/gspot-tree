@@ -12,10 +12,11 @@ import random
 import threading
 import subprocess
 from collections import deque
+from constants import DUAL_CHIP_WINDOW, ChipType
 
 SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
-DUAL_CHIP_WINDOW = 5  # seconds to wait for second chip
+
 SINGLE_CHIP_DIR = os.path.join(SONGS_DIR, "single_chip")
 DOUBLE_CHIP_DIR = os.path.join(SONGS_DIR, "double_chip")
 
@@ -95,7 +96,7 @@ class RFIDHandler:
                 if single_songs:
                     selected_song = random.choice(single_songs)
                     print(f"Single chip confirmed. Playing random single-chip song: {selected_song}")
-                    self.state.start_song(selected_song)
+                    self.state.start_song(selected_song, ChipType.SINGLE)
                 else:
                     print(f"No songs found in {SINGLE_CHIP_DIR}")
 
@@ -108,7 +109,7 @@ class RFIDHandler:
         if double_songs:
             random_song = random.choice(double_songs)
             print(f"Dual chip detected! Playing random double-chip song: {random_song}")
-            self.state.start_song(random_song)
+            self.state.start_song(random_song, ChipType.DOUBLE)
         else:
             print(f"No songs found in {DOUBLE_CHIP_DIR}")
         # Clear the recent codes after handling
@@ -189,7 +190,7 @@ def main():
 
     mode = _detect_operating_mode()
     sound = SoundController(SONGS_DIR, mode=mode)
-    light = LightController(simulation=args.simulation, persistent_gui=args.persistent_gui)
+    light = LightController(num_pixels=100, simulation=args.simulation, persistent_gui=args.persistent_gui)
     state = StateManager(sound, light)
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)
