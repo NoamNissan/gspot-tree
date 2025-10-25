@@ -12,9 +12,45 @@ import threading
 import time
 import socket
 import json
+import sys
+import select
+import tty
+import termios
 from .led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
+
+def wait_for_keypress_gui_safe():
+    """Wait for a keypress in a way that works with GUI event loops"""
+    try:
+        # For Unix-like systems (macOS, Linux)
+        if sys.platform != 'win32':
+            # Set terminal to raw mode
+            old_settings = termios.tcgetattr(sys.stdin)
+            tty.setraw(sys.stdin.fileno())
+            try:
+                # Wait for a single character
+                sys.stdin.read(1)
+            finally:
+                # Restore terminal settings
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        else:
+            # For Windows
+            import msvcrt
+            msvcrt.getch()
+    except (ImportError, OSError, AttributeError):
+        # Fallback for systems where termios/msvcrt don't work
+        # This includes some GUI environments
+        print("(Press Enter to continue...)")
+        input()
+
+async def wait_for_keypress_async():
+    """Async version of keypress waiting that works with GUI event loops"""
+    loop = asyncio.get_event_loop()
+    
+    # Run the blocking keypress function in a thread pool
+    # This prevents it from blocking the GUI event loop
+    await loop.run_in_executor(None, wait_for_keypress_gui_safe)
 
 from .constants import PERSISTENT_GUI_PORT
 from .pipeline_demo import (
@@ -539,8 +575,8 @@ class SpectrumEffect(Effect):
             color = Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
             
             start_led = band * self.band_width
-            for i in range(height):
-                if start_led + i < len(colors):
+            for i in range(self.band_width+4): # +4 to make sure we cover the whole band
+                if start_led + i < self.num_leds:
                     result[start_led + i] = color
                     
         return result
@@ -1069,10 +1105,14 @@ RECIPES = {
     )
 }
 
-async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool = False):
+async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool = False, controller: PipelineController = None):
     """Demonstrate recipe transitions"""
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
-    await controller.start()
+    # Track if we created the controller
+    own_controller = controller is None
+    
+    if controller is None:
+        controller = PipelineController(num_pixels, force_simulation=force_simulation)
+        await controller.start()
     
     try:
         # Start rendering loop
@@ -1084,72 +1124,109 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         print("🍽️ Recipe Transition Demo")
         print("Press Ctrl+C to stop at any time")
         
+        sleep_interval = 0.01
+        
+        print("GUI mode - using async keypress detection")
+        await asyncio.sleep(2)  # Brief pause before starting
+
         # Apply complex_demo
         await recipe_manager.apply_recipe(RECIPES["complex_demo"])
-        await asyncio.sleep(5)  # Reduced from 10
+        await asyncio.sleep(sleep_interval)  # Reduced from 10
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Pure rainbow effect
         await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(sleep_interval)  # Reduced from 8
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Transition to sunset_breathing (breathing continues, other effects change)
         await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(sleep_interval)  # Reduced from 8
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Transition to rainbow_wave
         await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(sleep_interval)  # Reduced from 8
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # LedFx-style spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(sleep_interval)  # Reduced from 8
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Energy pulse effect
         await recipe_manager.apply_recipe(RECIPES["energy_pulse"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(sleep_interval)  # Reduced from 6
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Wavelength flow
         await recipe_manager.apply_recipe(RECIPES["wavelength_flow"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(sleep_interval)  # Reduced from 6
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Rainbow scroll
         await recipe_manager.apply_recipe(RECIPES["rainbow_scroll"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(sleep_interval)  # Reduced from 6
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Frequency bars
         await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(sleep_interval)  # Reduced from 8
+        print("Press any key to continue...")
+        await wait_for_keypress_async()    
         
         # New effects showcase
         print("🔥 Showcasing new effects...")
         
         # Fire effect
         await recipe_manager.apply_recipe(RECIPES["fire_demo"], transition_time=2.0)
-        await asyncio.sleep(4)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Scanner effect
         await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
-        await asyncio.sleep(3)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Water ripples
         await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=2.0)
-        await asyncio.sleep(4)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Glitch matrix
         await recipe_manager.apply_recipe(RECIPES["glitch_matrix"], transition_time=1.0)
-        await asyncio.sleep(3)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Digital rain
         await recipe_manager.apply_recipe(RECIPES["digital_rain"], transition_time=2.0)
-        await asyncio.sleep(4)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Music spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
-        await asyncio.sleep(10)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()
         
         # Music pulse effect
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
-        await asyncio.sleep(10)
+        await asyncio.sleep(sleep_interval)
+        print("Press any key to continue...")
+        await wait_for_keypress_async()    
         
         # Stroboscopic demo: Blue/Magenta breathing vs White strobe
         print("🔥 Starting stroboscopic demo...")
@@ -1174,17 +1251,23 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
     except KeyboardInterrupt:
         print("\n🍽️ Recipe demo interrupted")
     finally:
-        await controller.stop()
+        # Only stop the controller if we created it
+        if own_controller:
+            await controller.stop()
 
-async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False):
+async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False, controller: PipelineController = None):
     """Run a single recipe continuously"""
     if recipe_name not in RECIPES:
         print(f"❌ Recipe '{recipe_name}' not found!")
         print(f"Available recipes: {', '.join(RECIPES.keys())}")
         return
     
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
-    await controller.start()
+    # Track if we created the controller
+    own_controller = controller is None
+    
+    if controller is None:
+        controller = PipelineController(num_pixels, force_simulation=force_simulation)
+        await controller.start()
     
     try:
         # Start rendering loop
@@ -1211,7 +1294,9 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simul
         # Clean up audio if it was started
         if hasattr(recipe_manager, 'audio_provider'):
             recipe_manager.audio_provider.stop()
-        await controller.stop()
+        # Only stop the controller if we created it
+        if own_controller:
+            await controller.stop()
 
 async def clear_all_leds(num_pixels: int, use_persistent_gui: bool = False):
     """Clear all LEDs to black"""
@@ -1236,10 +1321,14 @@ async def clear_all_leds(num_pixels: int, use_persistent_gui: bool = False):
     else:
         print("  Non-persistent mode starts blank automatically")
 
-async def set_led_range(range_str: str, num_pixels: int = 100, force_simulation: bool = False):
+async def set_led_range(range_str: str, num_pixels: int = 100, force_simulation: bool = False, controller: PipelineController = None):
     """Set specific LED range to white, all others black"""
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
-    await controller.start()
+    # Track if we created the controller
+    own_controller = controller is None
+    
+    if controller is None:
+        controller = PipelineController(num_pixels, force_simulation=force_simulation)
+        await controller.start()
     
     try:
         # Start rendering loop
@@ -1281,12 +1370,18 @@ async def set_led_range(range_str: str, num_pixels: int = 100, force_simulation:
     except ValueError:
         print(f"❌ Invalid range format: '{range_str}'. Use '5' or '5,10'")
     finally:
-        await controller.stop()
+        # Only stop the controller if we created it
+        if own_controller:
+            await controller.stop()
 
-async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0, force_simulation: bool = False):
+async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0, force_simulation: bool = False, controller: PipelineController = None):
     """LED crawl mode - progressively light up LEDs with blinking"""
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
-    await controller.start()
+    # Track if we created the controller
+    own_controller = controller is None
+    
+    if controller is None:
+        controller = PipelineController(num_pixels, force_simulation=force_simulation)
+        await controller.start()
     
     try:
         # Start rendering loop
@@ -1331,24 +1426,12 @@ async def led_crawl(num_pixels: int = 100, blink_duration: float = 2.0, force_si
     except KeyboardInterrupt:
         print(f"\n🐛 LED Crawl stopped")
     finally:
-        await controller.stop()
+        # Only stop the controller if we created it
+        if own_controller:
+            await controller.stop()
 
-async def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Recipe System Demo')
-    parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
-    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
-    parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
-    parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
-    parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
-    parser.add_argument('--simulation', action='store_true', help='Run in simulation mode with GUI (default: real LEDs)')
-    parser.add_argument('--high-fidelity', action='store_true', help='Use 48kHz audio sampling (default: 16kHz for better compatibility)')
-    parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
-    parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
-    
-    args = parser.parse_args()
-    
+async def main_async(args, controller: PipelineController = None):
+    """Async main function that handles the LED effects"""
     print(f"🍽️ Recipe System")
     print(f"  Pixels: {args.pixels}")
     
@@ -1378,16 +1461,71 @@ async def main():
     
     if args.set_led_range:
         print(f"  Mode: Set LED Range ({args.set_led_range})")
-        await set_led_range(args.set_led_range, args.pixels, force_simulation)
+        await set_led_range(args.set_led_range, args.pixels, force_simulation, controller=controller)
     elif args.led_crawl:
         print(f"  Mode: LED Crawl")
-        await led_crawl(args.pixels, args.crawl_blink_time, force_simulation)
+        await led_crawl(args.pixels, args.crawl_blink_time, force_simulation, controller=controller)
     elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
-        await run_single_recipe(args.recipe, args.pixels, force_simulation)
+        await run_single_recipe(args.recipe, args.pixels, force_simulation, controller=controller)
     else:
         print(f"  Mode: Full demo sequence")
-        await demo_recipe_transitions(args.pixels, force_simulation)
+        await demo_recipe_transitions(args.pixels, force_simulation, controller=controller)
+
+def main():
+    """Main entry point that handles GUI integration"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Recipe System Demo')
+    parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
+    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
+    parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
+    parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
+    parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
+    parser.add_argument('--simulation', action='store_true', help='Run in simulation mode with GUI (default: real LEDs)')
+    parser.add_argument('--high-fidelity', action='store_true', help='Use 48kHz audio sampling (default: 16kHz for better compatibility)')
+    parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
+    parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
+    
+    args = parser.parse_args()
+    
+    # If in simulation mode and not using persistent GUI, we need to run the GUI in the main thread
+    if args.simulation and not args.persistent_gui:
+        print("🖥️ Starting in simulation mode with GUI")
+        
+        # Create a controller to get the GUI instance
+        controller = PipelineController(args.pixels, force_simulation=True)
+        
+        # Start the controller
+        asyncio.run(controller.start())
+        
+        # Get the GUI instance
+        gui_instance = controller.pixels if hasattr(controller.pixels, 'start_mainloop') else None
+        
+        if gui_instance:
+            # Run the async logic in a background thread, passing the controller
+            async_thread = threading.Thread(
+                target=lambda: asyncio.run(main_async(args, controller=controller)),
+                daemon=True,
+                name="LED-Orchestrator-Async"
+            )
+            async_thread.start()
+            
+            # Run GUI mainloop in the main thread
+            print("🖥️ Starting GUI mainloop in main thread")
+            try:
+                gui_instance.start_mainloop()
+            except KeyboardInterrupt:
+                print("\n🛑 Shutting down...")
+            finally:
+                # Cleanup
+                asyncio.run(controller.stop())
+        else:
+            print("⚠️ No GUI instance found, running without GUI")
+            asyncio.run(main_async(args))
+    else:
+        # No GUI needed, just run async
+        asyncio.run(main_async(args))
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

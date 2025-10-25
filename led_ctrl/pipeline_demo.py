@@ -962,8 +962,12 @@ class PipelineController:
         if force_simulation:
             from . import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
+            self.simulation = True
+            self.sleep_rate = 1/1200
         else:
             print("Using real LED hardware")
+            self.simulation = False
+            self.sleep_rate = 1/60 # 60 FPS
         
         # Now import neopixel - will be real or mock depending on above
         import neopixel
@@ -996,13 +1000,11 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                # self.pixels[i] = (color.r, color.g, color.b)
-                self.pixels[i] = (color.g, color.r, color.b)
+                self.pixels[i] = (color.r, color.g, color.b)
+                # self.pixels[i] = (color.g, color.r, color.b)
             self.pixels.show()
             
-            SLEEP_RATE = 1/60 # was 1/60 at start
-            # 60 FPS
-            await asyncio.sleep(SLEEP_RATE)
+            await asyncio.sleep(self.sleep_rate)
     
     # Convenience methods
     def set_solid_color(self, color: Color):
