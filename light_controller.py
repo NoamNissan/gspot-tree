@@ -8,6 +8,7 @@ from led_ctrl.led_orchestrator import PipelineController, RecipeManager, RECIPES
 from constants import ChipType
 
 
+
 class LightController:
     def __init__(self, num_pixels: int = 100, simulation: bool = False, persistent_gui: bool = False):
         self.num_pixels = num_pixels
@@ -80,10 +81,13 @@ class LightController:
         cycling_recipes = [
             # "music_spectrum",    # Real-time audio spectrum visualization
             # "music_pulse",       # Colors pulse with music
+            "energy_pulse",
             "spectrum_analyzer", 
             "rainbow_wave",  
+            "rainbow",
             "wavelength_flow",
             "rainbow_scroll",  
+            "fire_demo",
         ]
         
         print("Starting continuous cycling of music recipes")
