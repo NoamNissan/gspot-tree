@@ -996,8 +996,8 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                self.pixels[i] = (color.r, color.g, color.b)
-                # self.pixels[i] = (color.g, color.r, color.b)
+                # self.pixels[i] = (color.r, color.g, color.b)
+                self.pixels[i] = (color.g, color.r, color.b)
             self.pixels.show()
             
             SLEEP_RATE = 1/60 # was 1/60 at start

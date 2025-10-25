@@ -69,10 +69,30 @@ class LightController:
                 print(f"Applying music pulse recipe for {chip_type} chip")
                 return self._recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=1.0)
             else:
-                print(f"Applying music spectrum recipe for {chip_type} chip")
-                return self._recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=1.0)
+                print(f"Starting cycling music recipes for {chip_type} chip")
+                return self._start_cycling_recipes()
 
         self._submit_coroutine(_apply)
+
+    async def _start_cycling_recipes(self):
+        """Start cycling through three different music recipes with 4-second intervals."""
+        # Define the three recipes to cycle through
+        cycling_recipes = [
+            # "music_spectrum",    # Real-time audio spectrum visualization
+            # "music_pulse",       # Colors pulse with music
+            "spectrum_analyzer", 
+            "rainbow_wave",  
+            "wavelength_flow",
+            "rainbow_scroll",  
+        ]
+        
+        print("Starting continuous cycling of music recipes")
+        
+        while True:
+            for recipe_name in cycling_recipes:
+                print(f"Applying {recipe_name} recipe")
+                await self._recipe_manager.apply_recipe(RECIPES[recipe_name], transition_time=1.0)
+                await asyncio.sleep(4.0)  # Wait 4 seconds before next recipe
 
     def stop_music(self):
         """Switch to a calm breathing-style recipe."""
