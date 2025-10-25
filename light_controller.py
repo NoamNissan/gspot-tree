@@ -81,7 +81,6 @@ class LightController:
         cycling_recipes = [
             # "music_spectrum",    # Real-time audio spectrum visualization
             # "music_pulse",       # Colors pulse with music
-            "energy_pulse",
             "spectrum_analyzer", 
             "rainbow_wave",  
             "rainbow",
