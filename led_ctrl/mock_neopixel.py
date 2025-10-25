@@ -8,16 +8,69 @@ import socket
 import threading
 import json
 from typing import Tuple, List
+from dataclasses import dataclass
 try:
     # When imported as part of the package (preferred)
-    from .constants import PERSISTENT_GUI_PORT
+    from .constants import PERSISTENT_GUI_PORT, LEDLayoutConstants
 except ImportError:
     # Fallback when this file is imported as a top-level module
-    from constants import PERSISTENT_GUI_PORT
+    from constants import PERSISTENT_GUI_PORT, LEDLayoutConstants
 
 # Global persistent GUI instance
 _persistent_gui = None
 _persistent_mode = False
+
+@dataclass
+class CircleConfig:
+    """Configuration for a single circle"""
+    radius_from_center: float
+
+@dataclass
+class LineConfig:
+    """Configuration for circles on a single line"""
+    circles: List[CircleConfig]
+
+@dataclass
+class LEDLayoutConfig:
+    """Configuration for all LED lines
+    
+    Example usage:
+        # Create default configuration using predefined constants
+        config = LEDLayoutConfig.create_default_config()
+        
+        # Create custom configuration - each line can have 2-3 circles at different distances
+        custom_config = LEDLayoutConfig.create_custom_config([
+            [100, 150],      # Line 0: 2 circles at radius 100 and 150
+            [120, 180, 220], # Line 1: 3 circles at radius 120, 180, 220
+            [90, 200],       # Line 2: 2 circles at radius 90 and 200
+            [110, 160, 210], # Line 3: 3 circles at radius 110, 160, 210
+            # ... etc for all 20 lines
+        ])
+    """
+    lines: List[LineConfig]
+    
+    @classmethod
+    def create_default_config(cls):
+        """Create default configuration for 20 lines using constants"""
+        lines = []
+        for line_idx in range(20):
+            # Use predefined radius values from constants
+            radius_list = LEDLayoutConstants.LAYOUT_DATA[line_idx]
+            circles = []
+            for radius in radius_list:
+                radius *= LEDLayoutConstants.RADIUS_MULTIPLIER
+                circles.append(CircleConfig(radius))
+            lines.append(LineConfig(circles))
+        return cls(lines)
+    
+    @classmethod
+    def create_custom_config(cls, line_configs: List[List[float]]):
+        """Create custom configuration from list of radius lists for each line"""
+        lines = []
+        for radius_list in line_configs:
+            circles = [CircleConfig(radius) for radius in radius_list]
+            lines.append(LineConfig(circles))
+        return cls(lines)
 
 def set_persistent_mode(enabled: bool):
     """Enable or disable persistent GUI mode"""
@@ -55,6 +108,9 @@ class PersistentGUI:
         led_size = 5
         pair_spacing = 12
         
+        # Create layout configuration
+        layout_config = LEDLayoutConfig.create_default_config()
+        
         # Draw circle boundaries first
         self.canvas.create_oval(
             center_x - max_radius, center_y - max_radius,
@@ -83,15 +139,12 @@ class PersistentGUI:
         pair_positions = []
         
         for line in range(num_lines):
-            pairs_on_line = random.randint(2, 3)
+            line_config = layout_config.lines[line]
             line_angle = line * line_angle_step
-            available_length = max_radius - inner_radius - 40
-            segment_length = available_length / pairs_on_line
             
-            for pair_idx in range(pairs_on_line):
-                segment_start = inner_radius + 20 + pair_idx * segment_length
-                segment_end = segment_start + segment_length
-                r = random.uniform(segment_start, segment_end)
+            for circle_idx, circle_config in enumerate(line_config.circles):
+                # Use the individual radius from each circle configuration
+                r = circle_config.radius_from_center
                 
                 pair_center_x = center_x + r * math.cos(line_angle)
                 pair_center_y = center_y + r * math.sin(line_angle)
@@ -251,6 +304,7 @@ class MockNeoPixel:
         
         if _persistent_mode:
             # Try to connect to persistent GUI
+            print("connecting to persistent GUI")
             self._connect_to_persistent_gui()
         else:
             # Don't create GUI immediately - will be created when needed
@@ -313,21 +367,21 @@ class MockNeoPixel:
         led_size = 5
         pair_spacing = 12
         
+        # Create layout configuration
+        layout_config = LEDLayoutConfig.create_default_config()
+        
         num_lines = 20
         line_angle_step = 2 * math.pi / num_lines
         
         pair_positions = []
         
         for line in range(num_lines):
-            pairs_on_line = random.randint(2, 3)
+            line_config = layout_config.lines[line]
             line_angle = line * line_angle_step
-            available_length = max_radius - inner_radius - 40
-            segment_length = available_length / pairs_on_line
             
-            for pair_idx in range(pairs_on_line):
-                segment_start = inner_radius + 20 + pair_idx * segment_length
-                segment_end = segment_start + segment_length
-                r = random.uniform(segment_start, segment_end)
+            for circle_idx, circle_config in enumerate(line_config.circles):
+                # Use the individual radius from each circle configuration
+                r = circle_config.radius_from_center
                 
                 pair_center_x = center_x + r * math.cos(line_angle)
                 pair_center_y = center_y + r * math.sin(line_angle)

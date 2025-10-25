@@ -24,19 +24,19 @@ class LightController:
 
         print(f'Initiating light controller with {num_pixels} pixels')
         # If running in simulation with GUI, start persistent GUI in a separate process
-        if self.simulation and self.persistent_gui:
-            try:
-                from led_ctrl import mock_neopixel as _mn
-                self._gui_process = multiprocessing.Process(
-                    target=_mn.start_persistent_gui,
-                    args=(self.num_pixels, False),
-                    daemon=True,
-                    name="LED-Persistent-GUI",
-                )
-                self._gui_process.start()
-            except Exception:
-                # Fall back silently; background runtime may still run headless
-                self._gui_process = None
+        # if self.simulation and self.persistent_gui:
+        #     try:
+        #         from led_ctrl import mock_neopixel as _mn
+        #         self._gui_process = multiprocessing.Process(
+        #             target=_mn.start_persistent_gui,
+        #             args=(self.num_pixels, False),
+        #             daemon=True,
+        #             name="LED-Persistent-GUI",
+        #         )
+        #         self._gui_process.start()
+        #     except Exception:
+        #         # Fall back silently; background runtime may still run headless
+        #         self._gui_process = None
 
         # Start background runtime in a separate thread
         self._start_background_runtime()
@@ -189,6 +189,11 @@ class LightController:
     
     def get_gui_instance(self):
         """Get the MockNeoPixel GUI instance for main thread control"""
-        if self.simulation and self._controller and hasattr(self._controller, 'pixels'):
+        # print("Getting GUI instance, RETURNING NONE")
+        # #TODO: Add persistent GUI support
+        # return None
+
+        # if self.simulation and self._controller and hasattr(self._controller, 'pixels'):
+        if self.simulation and not self.persistent_gui:
             return self._controller.pixels
         return None

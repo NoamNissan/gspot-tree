@@ -17,12 +17,13 @@ try:
     import neopixel
     SIMULATION_MODE = False
 except ImportError:
-    raise ImportError("Neopixel not found")
+    # raise ImportError("Neopixel not found")
     # Import mock modules
-    from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
+    from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board, set_persistent_mode
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
     print('in force simulation mode')
     SIMULATION_MODE = True
+    set_persistent_mode(True)
 
 class TransitionType(Enum):
     CUTOFF = "cutoff"

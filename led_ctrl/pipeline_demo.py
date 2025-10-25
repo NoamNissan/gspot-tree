@@ -68,9 +68,30 @@ class BaseColorLayer:
             return [color] * num_pixels
 
 class Effect:
-    """Base class for all effects"""
+    """
+    Base class for all effects.
+    
+    Effects modify the appearance of colors as they pass through the rendering pipeline.
+    Each effect can be enabled/disabled, have parameters configured, and maintains internal
+    state for time-based animations.
+    
+    Attributes:
+        effect_id: Unique identifier for this effect instance
+        enabled: Whether this effect is currently active
+        parameters: Dictionary of configurable effect parameters
+        blend_mode: How this effect blends with underlying colors
+        internal_state: Internal state dictionary for effect-specific data
+        start_time: Timestamp when the effect was created
+    """
     
     def __init__(self, effect_id: str = None):
+        """
+        Initialize a new effect instance.
+        
+        Args:
+            effect_id: Optional unique identifier for this effect. If not provided,
+                      a UUID will be generated automatically.
+        """
         self.effect_id = effect_id or str(uuid.uuid4())
         self.enabled = True
         self.parameters = {}
@@ -79,17 +100,52 @@ class Effect:
         self.start_time = time.time()
     
     def apply(self, colors: List[Color], elapsed: float) -> List[Color]:
-        """Apply effect to color array"""
+        """
+        Apply effect to color array.
+        
+        This is the public method that checks if the effect is enabled before
+        calling the internal _apply_effect method.
+        
+        Args:
+            colors: List of Color objects representing current pixel colors
+            elapsed: Time elapsed since effect start (in seconds)
+            
+        Returns:
+            List of Color objects after effect application. If effect is disabled,
+            returns colors unchanged.
+        """
         if not self.enabled:
             return colors
         return self._apply_effect(colors, elapsed)
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
-        """Override this in subclasses"""
+        """
+        Override this in subclasses to implement the actual effect logic.
+        
+        This method is called by apply() after checking if the effect is enabled.
+        Subclasses should implement their specific visual effect here.
+        
+        Args:
+            colors: List of Color objects representing current pixel colors
+            elapsed: Time elapsed since effect start (in seconds)
+            
+        Returns:
+            List of Color objects after effect application. The default implementation
+            returns colors unchanged.
+        """
         return colors
     
     def update_parameters(self, parameters: Dict[str, Any]):
-        """Update effect parameters"""
+        """
+        Update effect parameters.
+        
+        Merges the provided parameters dictionary into the existing parameters.
+        This allows partial updates without overriding all parameters.
+        
+        Args:
+            parameters: Dictionary of parameter names to values to update.
+                       Existing parameters not in this dict will remain unchanged.
+        """
         self.parameters.update(parameters)
 
 class BreathingEffect(Effect):
@@ -940,8 +996,8 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                # self.pixels[i] = (color.r, color.g, color.b)
-                self.pixels[i] = (color.g, color.r, color.b)
+                self.pixels[i] = (color.r, color.g, color.b)
+                # self.pixels[i] = (color.g, color.r, color.b)
             self.pixels.show()
             
             SLEEP_RATE = 1/60 # was 1/60 at start

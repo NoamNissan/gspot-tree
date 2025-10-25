@@ -523,7 +523,6 @@ class SpectrumEffect(Effect):
         self.band_width = num_leds // self.num_bands
         
     def _apply_effect(self, colors, elapsed: float):
-        from .led_controller import Color
         import colorsys
         
         result = [Color(0, 0, 0)] * len(colors)
@@ -555,7 +554,6 @@ class EnergyEffect(Effect):
         self.num_leds = num_leds
         
     def _apply_effect(self, colors, elapsed: float):
-        from .led_controller import Color
         import time
         
         # Simulate energy levels
@@ -591,7 +589,6 @@ class WavelengthEffect(Effect):
         self.num_leds = num_leds
         
     def _apply_effect(self, colors, elapsed: float):
-        from .led_controller import Color
         import colorsys
         
         result = []
@@ -629,7 +626,6 @@ class ScrollEffect(Effect):
             self.pattern.append((int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
             
     def _apply_effect(self, colors, elapsed: float):
-        from .led_controller import Color
         import time
         
         # Scroll speed
@@ -655,7 +651,6 @@ class BarsEffect(Effect):
         self.bar_width = num_leds // self.num_bars
         
     def _apply_effect(self, colors, elapsed: float):
-        from .led_controller import Color
         import colorsys
         
         result = [Color(0, 0, 0)] * len(colors)
