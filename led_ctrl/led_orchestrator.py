@@ -59,10 +59,10 @@ class RealTimeAudioProvider:
         self.running = False
         
         # Pre-calculate frequency bin indices for proper musical ranges
-        self.bass_bins = slice(0, int(250 * block_size / sample_rate))     # 0-250Hz (musical bass)
-        self.mid_bins = slice(int(250 * block_size / sample_rate), 
-                             int(4000 * block_size / sample_rate))          # 250-4000Hz (vocals, instruments)
-        self.high_bins = slice(int(4000 * block_size / sample_rate), 
+        self.bass_bins = slice(0, int(250 * block_size / self.sample_rate))     # 0-250Hz (musical bass)
+        self.mid_bins = slice(int(250 * block_size / self.sample_rate), 
+                             int(4000 * block_size / self.sample_rate))          # 250-4000Hz (vocals, instruments)
+        self.high_bins = slice(int(4000 * block_size / self.sample_rate), 
                               block_size // 2)                              # 4000Hz+ (cymbals, harmonics)
     
     def audio_callback(self, indata, frames, time, status):
