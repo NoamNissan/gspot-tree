@@ -15,6 +15,7 @@ import json
 from led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
+BANDS_OVERRIDE = None  # CLI override for number of bands
 
 from constants import PERSISTENT_GUI_PORT
 from pipeline_demo import (
@@ -38,15 +39,19 @@ class AudioData:
 class RealTimeAudioProvider:
     """Real-time audio analysis using sounddevice"""
     
-    def __init__(self, sample_rate=None, block_size=512):
+    def __init__(self, sample_rate=None, block_size=512, num_bands=3):
         self.sample_rate = sample_rate or SAMPLING_RATE
         self.block_size = block_size
+        self.num_bands = num_bands
         
         # Audio levels (thread-safe)
         self.bass = 0.0
         self.mid = 0.0
         self.high = 0.0
         self.overall = 0.0
+        
+        # Dynamic band levels
+        self.band_levels = [0.0] * num_bands
         
         # Beat detection
         self.beat_threshold = 0.3
@@ -58,12 +63,49 @@ class RealTimeAudioProvider:
         self.stream = None
         self.running = False
         
-        # Pre-calculate frequency bin indices for proper musical ranges
-        self.bass_bins = slice(0, int(250 * block_size / self.sample_rate))     # 0-250Hz (musical bass)
-        self.mid_bins = slice(int(250 * block_size / self.sample_rate), 
-                             int(4000 * block_size / self.sample_rate))          # 250-4000Hz (vocals, instruments)
-        self.high_bins = slice(int(4000 * block_size / self.sample_rate), 
-                              block_size // 2)                              # 4000Hz+ (cymbals, harmonics)
+        # Calculate frequency bins dynamically based on num_bands
+        self._calculate_frequency_bins()
+        
+        # Legacy properties for backward compatibility
+        self.bass_bins = self.frequency_bins[0] if num_bands >= 1 else slice(0, 0)
+        self.mid_bins = self.frequency_bins[1] if num_bands >= 2 else slice(0, 0)
+        self.high_bins = self.frequency_bins[2] if num_bands >= 3 else slice(0, 0)
+    
+    def _calculate_frequency_bins(self):
+        """Calculate frequency bins based on number of bands and sample rate"""
+        max_freq = self.sample_rate // 2  # Nyquist frequency
+        
+        if self.num_bands == 3:
+            # Original 3-band setup
+            if max_freq <= 8000:  # 16kHz sampling
+                frequencies = [0, 250, 2000, max_freq]
+            else:  # 48kHz sampling
+                frequencies = [0, 250, 4000, max_freq]
+        elif self.num_bands == 6:
+            # 6-band setup
+            if max_freq <= 8000:  # 16kHz sampling
+                frequencies = [0, 60, 150, 400, 1000, 2500, max_freq]
+            else:  # 48kHz sampling
+                frequencies = [0, 60, 250, 500, 2000, 4000, max_freq]
+        elif self.num_bands == 9:
+            # 9-band setup
+            if max_freq <= 8000:  # 16kHz sampling
+                frequencies = [0, 60, 120, 200, 350, 600, 1200, 2500, 5000, max_freq]
+            else:  # 48kHz sampling
+                frequencies = [0, 60, 120, 250, 500, 1000, 2000, 4000, 8000, max_freq]
+        else:
+            # Linear division for other band counts
+            frequencies = []
+            for i in range(self.num_bands + 1):
+                freq = (i * max_freq) // self.num_bands
+                frequencies.append(freq)
+        
+        # Convert frequencies to bin indices
+        self.frequency_bins = []
+        for i in range(len(frequencies) - 1):
+            start_bin = int(frequencies[i] * self.block_size / self.sample_rate)
+            end_bin = int(frequencies[i + 1] * self.block_size / self.sample_rate) + 1
+            self.frequency_bins.append(slice(start_bin, end_bin))
     
     def audio_callback(self, indata, frames, time, status):
         """Real-time audio processing callback"""
@@ -78,22 +120,27 @@ class RealTimeAudioProvider:
             fft = np.fft.rfft(audio_data)
             magnitude = np.abs(fft)
             
-            # Extract frequency bands
-            bass = np.mean(magnitude[self.bass_bins])
-            mid = np.mean(magnitude[self.mid_bins])
-            high = np.mean(magnitude[self.high_bins])
+            # Extract all frequency bands dynamically
+            band_values = []
+            for i, freq_bin in enumerate(self.frequency_bins):
+                band_value = np.mean(magnitude[freq_bin])
+                band_values.append(band_value)
             
-            # Much gentler scaling for music - use logarithmic scaling
-            # Music has sustained high levels, need more dynamic range
-            bass_scale = 0.05   # Very gentle scaling
-            mid_scale = 0.1     # Gentle scaling  
-            high_scale = 0.2    # Moderate scaling
+            # Apply scaling to all bands
+            scales = [0.05, 0.1, 0.2] * (self.num_bands // 3 + 1)  # Repeat scaling pattern
+            scaled_bands = []
+            for i, (band_value, scale) in enumerate(zip(band_values, scales[:self.num_bands])):
+                scaled_band = min(1.0, np.log10(band_value * scale + 1) / np.log10(2))
+                scaled_bands.append(scaled_band)
             
-            # Apply logarithmic scaling for better music dynamics
-            bass = min(1.0, np.log10(bass * bass_scale + 1) / np.log10(2))  # Log scale
-            mid = min(1.0, np.log10(mid * mid_scale + 1) / np.log10(2))
-            high = min(1.0, np.log10(high * high_scale + 1) / np.log10(2))
-            overall = (bass + mid + high) / 3
+            # Update band levels
+            self.band_levels = scaled_bands
+            
+            # Legacy compatibility - use first 3 bands
+            bass = scaled_bands[0] if len(scaled_bands) > 0 else 0.0
+            mid = scaled_bands[1] if len(scaled_bands) > 1 else 0.0
+            high = scaled_bands[2] if len(scaled_bands) > 2 else 0.0
+            overall = sum(scaled_bands) / len(scaled_bands) if scaled_bands else 0.0
             
             # Simple beat detection (bass spike)
             current_time = time.inputBufferAdcTime
@@ -103,7 +150,7 @@ class RealTimeAudioProvider:
                     beat_detected = True
                     self.last_beat_time = current_time
             
-            # Update thread-safe values
+            # Update thread-safe values (legacy compatibility)
             self.bass = bass
             self.mid = mid
             self.high = high
@@ -270,64 +317,57 @@ class MusicVisualizerEffect(Effect):
         return result
     
     def _spectrum_enhanced_visualization(self, colors: List[Color], bass: float, mid: float, high: float) -> List[Color]:
-        """Enhanced 6-band spectrum analyzer"""
+        """Enhanced multi-band spectrum analyzer"""
         result = []
-        pixels_per_zone = len(colors) // 6
         
-        # Zone 1: Sub-bass (deep red)
-        height = int(bass * pixels_per_zone)
-        for i in range(pixels_per_zone):
-            if i < height:
-                intensity = 1.0 - (i / pixels_per_zone) * 0.3
-                result.append(Color(int(128 * intensity), 0, 0))
-            else:
-                result.append(Color(0, 0, 0))
+        # Get band levels from audio provider
+        if hasattr(self, 'audio_provider') and hasattr(self.audio_provider, 'band_levels'):
+            band_levels = self.audio_provider.band_levels
+            num_bands = len(band_levels)
+        else:
+            # Fallback to 3-band mode
+            band_levels = [bass, mid, high]
+            num_bands = 3
         
-        # Zone 2: Bass (red)
-        height = int(bass * pixels_per_zone)
-        for i in range(pixels_per_zone):
-            if i < height:
-                intensity = 1.0 - (i / pixels_per_zone) * 0.3
-                result.append(Color(int(255 * intensity), 0, 0))
-            else:
-                result.append(Color(0, 0, 0))
+        pixels_per_band = len(colors) // num_bands
         
-        # Zone 3: Low-mid (orange)
-        height = int(mid * pixels_per_zone)
-        for i in range(pixels_per_zone):
-            if i < height:
-                intensity = 1.0 - (i / pixels_per_zone) * 0.3
-                result.append(Color(int(255 * intensity), int(128 * intensity), 0))
-            else:
-                result.append(Color(0, 0, 0))
+        # Color palette for different bands
+        colors_palette = [
+            (255, 0, 0),      # Red
+            (255, 128, 0),    # Orange  
+            (255, 255, 0),    # Yellow
+            (0, 255, 0),      # Green
+            (0, 255, 255),    # Cyan
+            (0, 0, 255),      # Blue
+            (128, 0, 255),    # Purple
+            (255, 0, 255),    # Magenta
+            (255, 255, 255),  # White
+        ]
         
-        # Zone 4: Mid (green)
-        height = int(mid * pixels_per_zone)
-        for i in range(pixels_per_zone):
-            if i < height:
-                intensity = 1.0 - (i / pixels_per_zone) * 0.3
-                result.append(Color(0, int(255 * intensity), 0))
+        # Visualize each band
+        for band_idx in range(num_bands):
+            band_level = band_levels[band_idx]
+            color_rgb = colors_palette[band_idx % len(colors_palette)]
+            
+            # Calculate pixels for this band
+            if band_idx == num_bands - 1:
+                # Last band gets remaining pixels
+                pixels_in_band = len(colors) - len(result)
             else:
-                result.append(Color(0, 0, 0))
-        
-        # Zone 5: High-mid (cyan)
-        height = int(high * pixels_per_zone)
-        for i in range(pixels_per_zone):
-            if i < height:
-                intensity = 1.0 - (i / pixels_per_zone) * 0.3
-                result.append(Color(0, int(255 * intensity), int(255 * intensity)))
-            else:
-                result.append(Color(0, 0, 0))
-        
-        # Zone 6: High (blue) - remaining pixels
-        height = int(high * pixels_per_zone)
-        remaining = len(colors) - len(result)
-        for i in range(remaining):
-            if i < height:
-                intensity = 1.0 - (i / remaining) * 0.3
-                result.append(Color(0, 0, int(255 * intensity)))
-            else:
-                result.append(Color(0, 0, 0))
+                pixels_in_band = pixels_per_band
+            
+            # Light up pixels based on band level
+            band_height = int(band_level * pixels_in_band)
+            for i in range(pixels_in_band):
+                if i < band_height:
+                    intensity = 1.0 - (i / pixels_in_band) * 0.3
+                    result.append(Color(
+                        int(color_rgb[0] * intensity),
+                        int(color_rgb[1] * intensity), 
+                        int(color_rgb[2] * intensity)
+                    ))
+                else:
+                    result.append(Color(0, 0, 0))
         
         return result
     
@@ -567,7 +607,9 @@ class RecipeManager:
         elif effect_type == "music_visualizer":
             # Get or create global audio provider
             if not hasattr(self, 'audio_provider'):
-                self.audio_provider = RealTimeAudioProvider()
+                # Get num_bands from effect config or CLI override
+                num_bands = BANDS_OVERRIDE or effect_config.parameters.get('num_bands', 3)
+                self.audio_provider = RealTimeAudioProvider(num_bands=num_bands)
                 self.audio_provider.start()
             effect = MusicVisualizerEffect(self.audio_provider)
         else:
@@ -873,7 +915,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "bass_boost": 2.0})
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "bass_boost": 2.0, "num_bands": 6})
         ]
     ),
     
@@ -1422,6 +1464,7 @@ async def main():
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
+    parser.add_argument('--bands', type=int, help='Override number of frequency bands (default: recipe setting)')
     parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
     parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
     parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
@@ -1436,12 +1479,17 @@ async def main():
     print(f"  Pixels: {args.pixels}")
     
     # Set audio sampling rate
-    global SAMPLING_RATE
+    global SAMPLING_RATE, BANDS_OVERRIDE
     if args.high_fidelity:
         SAMPLING_RATE = 48000
         print(f"  Audio: High-fidelity mode (48kHz)")
     else:
         print(f"  Audio: Standard mode (16kHz)")
+    
+    # Set bands override
+    if args.bands:
+        BANDS_OVERRIDE = args.bands
+        print(f"  Bands: Override to {args.bands} frequency bands")
     
     # Enable persistent GUI mode if requested
     if args.persistent_gui:
