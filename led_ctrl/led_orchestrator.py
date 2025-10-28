@@ -223,6 +223,8 @@ class MusicVisualizerEffect(Effect):
         
         if mode == 'spectrum':
             return self._spectrum_visualization(colors, bass, mid, high)
+        elif mode == 'spectrum_enhanced':
+            return self._spectrum_enhanced_visualization(colors, bass, mid, high)
         elif mode == 'pulse':
             return self._pulse_visualization(colors, overall)
         elif mode == 'wave':
@@ -260,6 +262,68 @@ class MusicVisualizerEffect(Effect):
         remaining = len(colors) - len(result)
         for i in range(remaining):
             if i < high_height:
+                intensity = 1.0 - (i / remaining) * 0.3
+                result.append(Color(0, 0, int(255 * intensity)))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        return result
+    
+    def _spectrum_enhanced_visualization(self, colors: List[Color], bass: float, mid: float, high: float) -> List[Color]:
+        """Enhanced 6-band spectrum analyzer"""
+        result = []
+        pixels_per_zone = len(colors) // 6
+        
+        # Zone 1: Sub-bass (deep red)
+        height = int(bass * pixels_per_zone)
+        for i in range(pixels_per_zone):
+            if i < height:
+                intensity = 1.0 - (i / pixels_per_zone) * 0.3
+                result.append(Color(int(128 * intensity), 0, 0))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        # Zone 2: Bass (red)
+        height = int(bass * pixels_per_zone)
+        for i in range(pixels_per_zone):
+            if i < height:
+                intensity = 1.0 - (i / pixels_per_zone) * 0.3
+                result.append(Color(int(255 * intensity), 0, 0))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        # Zone 3: Low-mid (orange)
+        height = int(mid * pixels_per_zone)
+        for i in range(pixels_per_zone):
+            if i < height:
+                intensity = 1.0 - (i / pixels_per_zone) * 0.3
+                result.append(Color(int(255 * intensity), int(128 * intensity), 0))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        # Zone 4: Mid (green)
+        height = int(mid * pixels_per_zone)
+        for i in range(pixels_per_zone):
+            if i < height:
+                intensity = 1.0 - (i / pixels_per_zone) * 0.3
+                result.append(Color(0, int(255 * intensity), 0))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        # Zone 5: High-mid (cyan)
+        height = int(high * pixels_per_zone)
+        for i in range(pixels_per_zone):
+            if i < height:
+                intensity = 1.0 - (i / pixels_per_zone) * 0.3
+                result.append(Color(0, int(255 * intensity), int(255 * intensity)))
+            else:
+                result.append(Color(0, 0, 0))
+        
+        # Zone 6: High (blue) - remaining pixels
+        height = int(high * pixels_per_zone)
+        remaining = len(colors) - len(result)
+        for i in range(remaining):
+            if i < height:
                 intensity = 1.0 - (i / remaining) * 0.3
                 result.append(Color(0, 0, int(255 * intensity)))
             else:
@@ -798,6 +862,18 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "bass_boost": 2.0})
+        ]
+    ),
+    
+    "spectrum_enhanced": Recipe(
+        name="Enhanced Spectrum Analyzer",
+        description="Enhanced real-time audio spectrum visualization",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "bass_boost": 2.0})
         ]
     ),
     
