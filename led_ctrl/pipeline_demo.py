@@ -563,6 +563,32 @@ class CrawlerEffect(Effect):
             ))
         return result
 
+class PinkCompressor(Effect):
+    """Changes all colors into shades of pink"""
+
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters['reverse'] = False
+
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        import colorsys
+        
+        result = []
+        for c in colors:
+            #r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+##            rgb_to_hsv
+            h,s,v = colorsys.rgb_to_hsv(c.r, c.g, c.b)
+            h = h/4 + 0.75
+            if self.parameters['reverse'] is True:
+                h = 0.75 - h
+            
+            
+            r,g,b = colorsys.hsv_to_rgb(h, s, v)
+            result.append(Color(r,g,b))
+            
+
+        return result
+
 class WaterEffect(Effect):
     """Water ripple simulation"""
     

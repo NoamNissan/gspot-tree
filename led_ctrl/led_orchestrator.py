@@ -58,7 +58,7 @@ from .pipeline_demo import (
     StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
     CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect, WalkingEffect,
-    BlendMode, Effect
+    BlendMode, PinkCompressor, Effect
 )
 
 @dataclass
@@ -434,10 +434,13 @@ class RecipeManager:
         
         # Effects to keep (update parameters)
         keep_effects = current_effect_types & new_effect_types
+        keep_effects = set()
         # Effects to remove
         remove_effects = current_effect_types - new_effect_types
+        remove_effects = current_effect_types
         # Effects to add
         add_effects = new_effect_types - current_effect_types
+        add_effects = new_effect_types
         
         # Step 1: Update existing effects
         for effect_config in new_effects:
@@ -458,8 +461,8 @@ class RecipeManager:
                     print(f"    ❌ Failed to remove {effect_type} (ID: {effect_id})")
             else:
                 print(f"    ⚠️ Effect {effect_type} not in active_effects")
-            if removal_delay > 0:
-                await asyncio.sleep(removal_delay)
+            # if removal_delay > 0:
+            #     await asyncio.sleep(removal_delay)
         
         # Step 3: Gradually add new effects
         addition_delay = transition_time / max(len(add_effects), 1) if add_effects else 0
@@ -468,8 +471,8 @@ class RecipeManager:
                 print(f"  ➕ Adding {effect_config.effect_type}")
                 effect_id = await self._create_effect(effect_config)
                 self.active_effects[effect_config.effect_type] = effect_id
-                if addition_delay > 0:
-                    await asyncio.sleep(addition_delay)
+                # if addition_delay > 0:
+                #     await asyncio.sleep(addition_delay)
     
     async def _update_effect_parameters(self, effect_config: EffectConfig):
         """Update parameters of existing effect"""
@@ -540,6 +543,8 @@ class RecipeManager:
                 self.audio_provider = RealTimeAudioProvider()
                 self.audio_provider.start()
             effect = MusicVisualizerEffect(self.audio_provider)
+        elif effect_type == "pink_compressor":
+            effect = PinkCompressor()
         else:
             raise ValueError(f"Unknown effect type: {effect_type}")
         
@@ -805,6 +810,23 @@ RECIPES = {
             EffectConfig("sparkle", {"density": 0.05})
         ]
     ),
+
+    "pink_rainbow_wave": Recipe(
+        name="Pink Rainbow Wave",
+        description="Rainbow colors with wave effect",
+        base_colors=BaseColorConfig(
+            colors=[
+                Color(255, 0, 209),Color(189, 2, 105), Color(158, 2, 189),
+            ],
+            mode=TransitionMode.CYCLE,
+            speed=0.5
+        ),
+        effects=[
+            EffectConfig("wave", {"speed": 2.0, "amplitude": 0.3}),
+            EffectConfig("sparkle", {"density": 0.05}),
+            EffectConfig("pink_compressor", {"reverse":True})
+        ]
+    ),
     
     "rainbow": Recipe(
         name="Pure Rainbow",
@@ -854,7 +876,20 @@ RECIPES = {
             EffectConfig("spectrum", {"sensitivity": 1.0})
         ]
     ),
-    
+
+    "pink_spectrum_analyzer": Recipe(
+        name="Spectrum Analyzer",
+        description="LedFx-style spectrum analyzer bars",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("spectrum", {"sensitivity": 1.0}),
+            EffectConfig("pink_compressor", {})
+        ]
+    ),
+
     "energy_pulse": Recipe(
         name="Energy Pulse",
         description="Energy-based color changes",
@@ -878,7 +913,20 @@ RECIPES = {
             EffectConfig("wavelength", {"speed": 1.0})
         ]
     ),
-    
+
+    "pink_wavelength_flow": Recipe(
+        name="Wavelength Flow",
+        description="Traveling wavelength effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("wavelength", {"speed": 1.0}),
+            EffectConfig("pink_compressor", {})
+        ]
+    ),
+
     "rainbow_scroll": Recipe(
         name="Rainbow Scroll",
         description="Scrolling rainbow pattern",
@@ -929,6 +977,21 @@ RECIPES = {
         ]
     ),
     
+    "pink_fire": Recipe(
+        name="Pink Fire Demo",
+        description="Flickering fire effect",
+        base_colors=BaseColorConfig(
+            # colors=[Color(255, 0, 221), Color(158, 2, 189)],  # pink to purple
+            colors=[Color(255, 0, 221)],  # pink to purple
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("fire", {"speed": 0.06, "intensity": 10}),
+            EffectConfig("pink_compressor", {"reverse" : True})
+        ]
+    ),
+
     "scanner": Recipe(
         name="Scanner",
         description="Cylon eye scanner effect",
