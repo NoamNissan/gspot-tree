@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import multiprocessing
+from concurrent.futures import Future
 from typing import Optional
 
 # Integrate with LED controller stack
@@ -22,6 +23,7 @@ class LightController:
         self._recipe_manager: Optional[RecipeManager] = None
         self._render_task: Optional[asyncio.Task] = None
         self._loop_ready: Optional[threading.Event] = None
+        self._music_task: Optional[Future] = None
 
         print(f'Initiating light controller with {num_pixels} pixels')
         # If running in simulation with GUI, start persistent GUI in a separate process
@@ -78,18 +80,22 @@ class LightController:
             else:
                 print(f"Starting cycling music recipes for {chip_type} chip")
                 single_chip_recipes = [
-                    # "music_spectrum",    # Real-time audio spectrum visualization
+                    "music_spectrum",    # Real-time audio spectrum visualization
                     # "music_pulse",       # Colors pulse with music
-                    "spectrum_analyzer", 
-                    "rainbow_wave",  
-                    "rainbow",
-                    "wavelength_flow",
-                    "rainbow_scroll",  
-                    "fire_demo",
+                    # "spectrum_analyzer", 
+                    # "rainbow_wave",  
+                    # "rainbow",
+                    # "wavelength_flow",
+                    # "rainbow_scroll",  
+                    # "fire_demo",
                 ]
                 return self._start_cycling_recipes(single_chip_recipes)
 
-        self._submit_coroutine(_apply)
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
 
     async def _start_cycling_recipes(self, cycling_recipes, sleep_interval=4.0):
         """Start cycling through three different music recipes with 4-second intervals."""
@@ -106,6 +112,7 @@ class LightController:
     def stop_music(self):
         """Switch to a calm breathing-style recipe."""
         print("Stopping music in LightController")
+        self._cancel_music_task()
         def _apply():
             return self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=1.0)
 
@@ -211,11 +218,21 @@ class LightController:
             return
             
         try:
-            asyncio.run_coroutine_threadsafe(coro_factory(), self._loop)
+            return asyncio.run_coroutine_threadsafe(coro_factory(), self._loop)
         except Exception as e:
             print(f"Error submitting coroutine: {e}")
-            pass
+            return None
     
+    def _cancel_music_task(self):
+        if self._music_task:
+            if not self._music_task.done():
+                self._music_task.cancel()
+            self._music_task = None
+
+    def _on_music_task_done(self, future: Future):
+        if self._music_task is future:
+            self._music_task = None
+
     def get_gui_instance(self):
         """Get the MockNeoPixel GUI instance for main thread control"""
         # print("Getting GUI instance, RETURNING NONE")

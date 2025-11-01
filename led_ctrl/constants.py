@@ -2,6 +2,9 @@
 Constants for LED orchestrator
 """
 
+from constants import NUM_PIXELS
+
+
 # Persistent GUI configuration
 PERSISTENT_GUI_PORT = 9998
 

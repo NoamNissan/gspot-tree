@@ -12,7 +12,7 @@ import random
 import threading
 import subprocess
 from collections import deque
-from constants import DUAL_CHIP_WINDOW, ChipType
+from constants import DUAL_CHIP_WINDOW, ChipType, NUM_PIXELS
 
 SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
@@ -190,7 +190,7 @@ def main():
 
     mode = _detect_operating_mode()
     sound = SoundController(SONGS_DIR, mode=mode)
-    light = LightController(num_pixels=100, simulation=args.simulation, persistent_gui=args.persistent_gui)
+    light = LightController(num_pixels=NUM_PIXELS, simulation=args.simulation, persistent_gui=args.persistent_gui)
     state = StateManager(sound, light)
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)

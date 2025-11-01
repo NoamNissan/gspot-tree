@@ -16,6 +16,8 @@ import sys
 import select
 import tty
 import termios
+
+from constants import NUM_PIXELS
 from .led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
@@ -229,6 +231,12 @@ class MusicVisualizerEffect(Effect):
     
     def __init__(self, audio_provider: RealTimeAudioProvider, effect_id: str = None):
         super().__init__(effect_id)
+        import random
+        perm = [x for x in range(96)]
+        random.shuffle(perm)
+        self.perm = perm
+        print("============ initializing effect")
+        print(f'{self.perm=}')
         self.audio_provider = audio_provider
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
@@ -253,15 +261,16 @@ class MusicVisualizerEffect(Effect):
         mode = self.parameters['mode']
         
         if mode == 'spectrum':
-            return self._spectrum_visualization(colors, bass, mid, high)
+            colors = self._spectrum_visualization(colors, bass, mid, high)
         elif mode == 'pulse':
-            return self._pulse_visualization(colors, overall)
+            colors = self._pulse_visualization(colors, overall)
         elif mode == 'wave':
-            return self._wave_visualization(colors, bass, elapsed)
+            colors = self._wave_visualization(colors, bass, elapsed)
         elif mode == 'strobe':
-            return self._strobe_visualization(colors, audio_data.is_beat, overall)
-        else:
-            return colors
+            colors = self._strobe_visualization(colors, audio_data.is_beat, overall)
+        
+        colors = [colors[i] for i in self.perm]
+        return colors
     
     def _spectrum_visualization(self, colors: List[Color], bass: float, mid: float, high: float) -> List[Color]:
         """3-band spectrum analyzer"""
