@@ -373,18 +373,17 @@ class MusicVisualizerEffect(Effect):
         return result
     
     def _pulse_visualization(self, colors: List[Color], overall: float) -> List[Color]:
-        """Pulse base colors with audio - with dynamic range compression"""
+        """Pulse base colors with audio - using raw overall level"""
         
-        # Dynamic range compression for music
-        # Maps 0.0-1.0 input to a smaller output range so music variations are visible
-        compressed_overall = overall ** 0.5  # Square root compression
-        
+        # Use raw overall level without compression
         # Smaller brightness range for more visible variations during music
         min_brightness = 0.05  # 5% minimum (very low)
         max_brightness = 1.0   # 100% maximum
         
-        # Map compressed audio level to brightness range
-        pulse_intensity = min_brightness + (compressed_overall * (max_brightness - min_brightness))
+        overall **= 3 # the higher the power the more dramatic strobe it looks
+
+        # Map audio level directly to brightness range
+        pulse_intensity = min_brightness + (overall * (max_brightness - min_brightness))
         
         return [Color(
             int(c.r * pulse_intensity), 
