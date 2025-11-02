@@ -132,14 +132,19 @@ class RealTimeAudioProvider:
                 name = device['name'].lower()
                 if device['max_input_channels'] > 0:
                     # macOS system audio devices
-                    if any(keyword in name for keyword in ['blackhole', 'soundflower', 'loopback']):
+                    if any(keyword in name for keyword in ['blackhole', 'soundflower']):
                         input_device = i
                         print(f"🎵 Found system audio device: {device['name']}")
                         break
-                    # Linux monitor devices  
-                    elif 'monitor' in name:
+                    # Linux monitor devices (but skip hardware loopback)
+                    elif 'monitor' in name and 'loopback' not in name:
                         input_device = i
                         print(f"🎵 Found monitor device: {device['name']}")
+                        break
+                    # PulseAudio/PipeWire pulse device
+                    elif 'pulse' in name:
+                        input_device = i
+                        print(f"🎵 Found pulse device: {device['name']}")
                         break
             
             # Fallback to default input device
