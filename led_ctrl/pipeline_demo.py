@@ -13,6 +13,9 @@ import numpy as np
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
+
+# Global pipeline configuration
+PIPELINE_FPS = 240  # 240 FPS for very smooth effects
 from led_controller import Color
 
 class TransitionMode(Enum):
@@ -136,6 +139,26 @@ class StrobeEffect(Effect):
             return colors
         else:
             # Strobe off - dark
+            return [Color(0, 0, 0)] * len(colors)
+
+class WhiteStrobeEffect(Effect):
+    """Pure white strobe effect - ignores base colors"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'frequency': 10.0,  # Hz - strobes per second
+        }
+
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        cycle_time = 1.0 / self.parameters['frequency']
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if phase < 0.5:  # 50% duty cycle - on for half the cycle
+            # Strobe on - pure white
+            return [Color(255, 255, 255)] * len(colors)
+        else:
+            # Strobe off - black
             return [Color(0, 0, 0)] * len(colors)
 
 class SparkleEffect(Effect):
@@ -912,7 +935,7 @@ class PipelineController:
         import neopixel
         import board
         
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=True)
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
         self.running = False
         self.start_time = 0
     
@@ -941,9 +964,70 @@ class PipelineController:
                 self.pixels[i] = (color.r, color.g, color.b)
             self.pixels.show()
             
-            # 60 FPS
-            await asyncio.sleep(1/60)
+            # Use global FPS setting
+            await asyncio.sleep(1/PIPELINE_FPS)
     
+    def trigger_strobe_sync(self, frequency: float, duration: float):
+        """Synchronous direct strobe - use fill method with frequency compensation"""
+        print(f"🔥 Starting {frequency}Hz strobe for {duration}s...")
+        
+        # Non-linear compensation - more aggressive at higher frequencies
+        # At 1Hz: ~0%, At 35Hz: ~25%
+        if frequency <= 1:
+            compensation_factor = 0
+        else:
+            # Quadratic growth: more compensation needed at higher frequencies
+            normalized_freq = (frequency - 1) / 34  # 0 to 1 for 1Hz to 35Hz
+            compensation_factor = min(0.25, normalized_freq ** 1.2 * 0.25)
+        
+        adjusted_frequency = frequency / (1 - compensation_factor)
+        
+        print(f"🔧 Compensation: {compensation_factor*100:.1f}% -> {adjusted_frequency:.1f} Hz internal")
+        
+        start_time = time.time()
+        half_period = 1.0 / (2 * adjusted_frequency)  # Use adjusted frequency
+        cycle_count = 0
+        
+        # Try fill method first (should be fastest)
+        try:
+            while time.time() - start_time < duration:
+                # White
+                self.pixels.fill((255, 255, 255))
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                # Black
+                self.pixels.fill((0, 0, 0))
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                cycle_count += 1
+                
+        except AttributeError:
+            print("Fill method not available, using slice assignment")
+            # Fallback to slice assignment
+            white_array = [(255, 255, 255)] * self.num_pixels
+            black_array = [(0, 0, 0)] * self.num_pixels
+            
+            while time.time() - start_time < duration:
+                self.pixels[:] = white_array
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                self.pixels[:] = black_array
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                cycle_count += 1
+        
+        elapsed = time.time() - start_time
+        actual_freq = cycle_count / elapsed
+        print(f"🔥 Strobe complete: {cycle_count} cycles in {elapsed:.2f}s = {actual_freq:.1f} Hz")
+
+    async def trigger_strobe(self, frequency: float, duration: float):
+        """Async wrapper for sync strobe"""
+        self.trigger_strobe_sync(frequency, duration)
+
     # Convenience methods
     def set_solid_color(self, color: Color):
         """Set solid color base"""

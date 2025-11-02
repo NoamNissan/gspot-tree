@@ -16,14 +16,15 @@ from led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
 BANDS_OVERRIDE = None  # CLI override for number of bands
+STROBE_FREQ = 15.0     # Default strobe frequency
 
 from constants import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
-    StrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
+    StrobeEffect, WhiteStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
     CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect, WalkingEffect,
-    BlendMode, Effect
+    BlendMode, Effect, PIPELINE_FPS
 )
 
 @dataclass
@@ -557,6 +558,8 @@ class RecipeManager:
             effect = BreathingEffect()
         elif effect_type == "strobe":
             effect = StrobeEffect()
+        elif effect_type == "white_strobe":
+            effect = WhiteStrobeEffect()
         elif effect_type == "sparkle":
             effect = SparkleEffect()
         elif effect_type == "wave":
@@ -1183,13 +1186,13 @@ RECIPES = {
     
     "white_strobe": Recipe(
         name="White Strobe",
-        description="High-frequency white strobe (stroboscopic effect)",
+        description="Pure white strobe at specified frequency",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 255, 255)],  # White
+            colors=[Color(0, 0, 0)],  # Black base (will be overridden by white strobe)
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("strobe", {"frequency": 100.0, "duty_cycle": 0.5})  # True stroboscopic range
+            EffectConfig("white_strobe", {"frequency": STROBE_FREQ})  # Use global frequency
         ]
     )
 }
@@ -1276,18 +1279,19 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
         await asyncio.sleep(10)
         
-        # Stroboscopic demo: Blue/Magenta breathing vs White strobe
+        # Stroboscopic demo: Blue/Magenta breathing vs Direct white strobe
         print("🔥 Starting stroboscopic demo...")
         
-        # Stroboscopic cycle: 10s breathing + 5s strobe, repeat 3 times
+        # Stroboscopic cycle: 10s breathing + 5s strobe (15Hz, 25Hz, 35Hz), repeat 3 times
+        strobe_frequencies = [15.0, 25.0, 35.0]
         for cycle in range(3):
             print(f"   Cycle {cycle + 1}/3: Breathing phase...")
             await recipe_manager.apply_recipe(RECIPES["blue_magenta_breathing"], transition_time=0.0)
-            await asyncio.sleep(10.0)
-            
-            print(f"   Cycle {cycle + 1}/3: Strobe phase...")
-            await recipe_manager.apply_recipe(RECIPES["white_strobe"], transition_time=0.0)
             await asyncio.sleep(5.0)
+            
+            print(f"   Cycle {cycle + 1}/3: Direct strobe phase...")
+            freq = strobe_frequencies[cycle]
+            await controller.trigger_strobe(freq, 5.0)  # Direct hardware strobe
         
         # Back to sunset_breathing (smooth transition)
         await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
@@ -1312,15 +1316,29 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simul
     await controller.start()
     
     try:
-        # Start rendering loop
-        render_task = asyncio.create_task(controller.run_loop())
-        
-        # Create recipe manager
-        recipe_manager = RecipeManager(controller)
-        
-        recipe = RECIPES[recipe_name]
-        print(f"🍽️ Running recipe: {recipe.name}")
-        print(f"   Description: {recipe.description}")
+        # Special handling for white_strobe - use direct hardware strobe
+        if recipe_name == "white_strobe":
+            print(f"🔥 Direct white strobe mode at {STROBE_FREQ} Hz")
+            print("Press Ctrl+C to stop")
+            print("🚫 BYPASSING PIPELINE - Direct hardware control")
+            
+            # DON'T start the render loop - we're bypassing it completely
+            
+            # Continuous direct strobe in 3-second bursts
+            while True:
+                await controller.trigger_strobe(STROBE_FREQ, 3.0)  # 3 second bursts
+                
+        else:
+            # Normal recipe handling
+            # Start rendering loop
+            render_task = asyncio.create_task(controller.run_loop())
+            
+            # Create recipe manager
+            recipe_manager = RecipeManager(controller)
+            
+            recipe = RECIPES[recipe_name]
+            print(f"🍽️ Running recipe: {recipe.name}")
+            print(f"   Description: {recipe.description}")
         print("   Press Ctrl+C to stop...")
         
         # Apply recipe
@@ -1465,6 +1483,8 @@ async def main():
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
     parser.add_argument('--bands', type=int, help='Override number of frequency bands (default: recipe setting)')
+    parser.add_argument('--strobe-freq', type=float, default=15.0, help='White strobe frequency in Hz (default: 15.0)')
+    parser.add_argument('--fps', type=int, help=f'Pipeline FPS for effect calculations (default: {PIPELINE_FPS})')
     parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
     parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
     parser.add_argument('--persistent-gui', action='store_true', help='Use persistent GUI that stays open between runs')
@@ -1478,8 +1498,17 @@ async def main():
     print(f"🍽️ Recipe System")
     print(f"  Pixels: {args.pixels}")
     
+    # Set global FPS if provided
+    if args.fps:
+        import pipeline_demo
+        pipeline_demo.PIPELINE_FPS = args.fps
+        print(f"  FPS: {args.fps}")
+    else:
+        print(f"  FPS: {PIPELINE_FPS} (default)")
+
     # Set audio sampling rate
-    global SAMPLING_RATE, BANDS_OVERRIDE
+    global SAMPLING_RATE, BANDS_OVERRIDE, STROBE_FREQ
+    STROBE_FREQ = args.strobe_freq
     if args.high_fidelity:
         SAMPLING_RATE = 48000
         print(f"  Audio: High-fidelity mode (48kHz)")
