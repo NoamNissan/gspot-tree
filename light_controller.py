@@ -114,7 +114,7 @@ class LightController:
         print("Stopping music in LightController")
         self._cancel_music_task()
         def _apply():
-            return self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=1.0)
+            return self._recipe_manager.apply_recipe(RECIPES["calm_rainbow_wave"], transition_time=1.0)
 
         self._submit_coroutine(_apply)
 

@@ -820,6 +820,22 @@ RECIPES = {
         ]
     ),
 
+    "calm_rainbow_wave": Recipe(
+        name="Calm Rainbow Wave",
+        description="Rainbow colors with wave effect",
+        base_colors=BaseColorConfig(
+            colors=[
+                Color(255, 0, 0), Color(255, 127, 0), Color(255, 255, 0),
+                Color(0, 255, 0), Color(0, 0, 255), Color(75, 0, 130), Color(148, 0, 211)
+            ],
+            mode=TransitionMode.FADE,
+            speed=0.1
+        ),
+        effects=[
+            EffectConfig("wave", {"speed": 0.2, "amplitude": 0.3}),
+        ]
+    ),
+
     "pink_rainbow_wave": Recipe(
         name="Pink Rainbow Wave",
         description="Rainbow colors with wave effect",
