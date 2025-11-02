@@ -7,7 +7,13 @@ import asyncio
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional
 import numpy as np
-import sounddevice as sd
+try:
+    import sounddevice as sd
+    AUDIO_AVAILABLE = True
+except ImportError:
+    print("⚠️  Missing audio dependencies. Install with: pip install sounddevice numpy")
+    AUDIO_AVAILABLE = False
+    sd = None
 import threading
 import time
 import socket
@@ -609,12 +615,16 @@ class RecipeManager:
             effect = BarsEffect(self.controller.num_pixels)
         elif effect_type == "music_visualizer":
             # Get or create global audio provider
-            if not hasattr(self, 'audio_provider'):
-                # Get num_bands from effect config or CLI override
-                num_bands = BANDS_OVERRIDE or effect_config.parameters.get('num_bands', 3)
-                self.audio_provider = RealTimeAudioProvider(num_bands=num_bands)
-                self.audio_provider.start()
-            effect = MusicVisualizerEffect(self.audio_provider)
+            if not AUDIO_AVAILABLE:
+                print("⚠️  Audio not available - install with: pip install sounddevice numpy")
+                effect = BreathingEffect()  # Fallback to breathing effect
+            else:
+                if not hasattr(self, 'audio_provider'):
+                    # Get num_bands from effect config or CLI override
+                    num_bands = BANDS_OVERRIDE or effect_config.parameters.get('num_bands', 3)
+                    self.audio_provider = RealTimeAudioProvider(num_bands=num_bands)
+                    self.audio_provider.start()
+                effect = MusicVisualizerEffect(self.audio_provider)
         else:
             raise ValueError(f"Unknown effect type: {effect_type}")
         
