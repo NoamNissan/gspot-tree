@@ -979,6 +979,9 @@ class EffectPipeline:
 
 class PipelineController:
     """High-level controller for the effects pipeline"""
+
+    GRB = 1
+    RGB = 0
     
     def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = True):
         self.num_pixels = num_pixels
@@ -989,10 +992,12 @@ class PipelineController:
             from . import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
             self.simulation = True
+            self.color_order = self.RGB
             self.sleep_rate = 1/1200
         else:
             print("Using real LED hardware")
             self.simulation = False
+            self.color_order = self.GRB
             self.sleep_rate = 1/60 # 60 FPS
         
         # Now import neopixel - will be real or mock depending on above
@@ -1026,8 +1031,10 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                self.pixels[i] = (color.r, color.g, color.b)
-                # self.pixels[i] = (color.g, color.r, color.b)
+                if self.color_order == self.RGB:
+                    self.pixels[i] = (color.r, color.g, color.b)
+                elif self.color_order == self.GRB:
+                    self.pixels[i] = (color.g, color.r, color.b)
             self.pixels.show()
             
             await asyncio.sleep(self.sleep_rate)
