@@ -141,13 +141,14 @@ class StrobeEffect(Effect):
             # Strobe off - dark
             return [Color(0, 0, 0)] * len(colors)
 
-class WhiteStrobeEffect(Effect):
-    """Pure white strobe effect - ignores base colors"""
+class ColorStrobeEffect(Effect):
+    """Color strobe effect - accepts any color"""
     
     def __init__(self, effect_id: str = None):
         super().__init__(effect_id)
         self.parameters = {
             'frequency': 10.0,  # Hz - strobes per second
+            'color': Color(255, 255, 255)  # Default white, can be overridden
         }
 
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
@@ -155,8 +156,8 @@ class WhiteStrobeEffect(Effect):
         phase = (elapsed % cycle_time) / cycle_time
         
         if phase < 0.5:  # 50% duty cycle - on for half the cycle
-            # Strobe on - pure white
-            return [Color(255, 255, 255)] * len(colors)
+            # Strobe on - use specified color
+            return [self.parameters['color']] * len(colors)
         else:
             # Strobe off - black
             return [Color(0, 0, 0)] * len(colors)
@@ -967,9 +968,9 @@ class PipelineController:
             # Use global FPS setting
             await asyncio.sleep(1/PIPELINE_FPS)
     
-    def trigger_strobe_sync(self, frequency: float, duration: float):
+    def trigger_strobe_sync(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
         """Synchronous direct strobe - use fill method with frequency compensation"""
-        print(f"🔥 Starting {frequency}Hz strobe for {duration}s...")
+        print(f"🔥 Starting {frequency}Hz {color} strobe for {duration}s...")
         
         # Non-linear compensation - more aggressive at higher frequencies
         # At 1Hz: ~0%, At 35Hz: ~25%
@@ -990,14 +991,17 @@ class PipelineController:
         
         # Try fill method first (should be fastest)
         try:
+            color_tuple = (color.r, color.g, color.b)
+            black_tuple = (0, 0, 0)
+            
             while time.time() - start_time < duration:
-                # White
-                self.pixels.fill((255, 255, 255))
+                # Color
+                self.pixels.fill(color_tuple)
                 self.pixels.show()
                 time.sleep(half_period)
                 
                 # Black
-                self.pixels.fill((0, 0, 0))
+                self.pixels.fill(black_tuple)
                 self.pixels.show()
                 time.sleep(half_period)
                 
@@ -1005,12 +1009,12 @@ class PipelineController:
                 
         except AttributeError:
             print("Fill method not available, using slice assignment")
-            # Fallback to slice assignment
-            white_array = [(255, 255, 255)] * self.num_pixels
+            # Fallback to slice assignment with pre-allocated arrays
+            color_array = [(color.r, color.g, color.b)] * self.num_pixels
             black_array = [(0, 0, 0)] * self.num_pixels
             
             while time.time() - start_time < duration:
-                self.pixels[:] = white_array
+                self.pixels[:] = color_array
                 self.pixels.show()
                 time.sleep(half_period)
                 
@@ -1024,9 +1028,9 @@ class PipelineController:
         actual_freq = cycle_count / elapsed
         print(f"🔥 Strobe complete: {cycle_count} cycles in {elapsed:.2f}s = {actual_freq:.1f} Hz")
 
-    async def trigger_strobe(self, frequency: float, duration: float):
+    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
         """Async wrapper for sync strobe"""
-        self.trigger_strobe_sync(frequency, duration)
+        self.trigger_strobe_sync(frequency, duration, color)
 
     # Convenience methods
     def set_solid_color(self, color: Color):

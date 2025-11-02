@@ -21,7 +21,7 @@ STROBE_FREQ = 15.0     # Default strobe frequency
 from constants import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
-    StrobeEffect, WhiteStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
+    StrobeEffect, ColorStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
     CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect, WalkingEffect,
     BlendMode, Effect, PIPELINE_FPS
@@ -558,7 +558,8 @@ class RecipeManager:
         elif effect_type == "strobe":
             effect = StrobeEffect()
         elif effect_type == "white_strobe":
-            effect = WhiteStrobeEffect()
+            effect = ColorStrobeEffect()
+            effect.parameters['color'] = Color(255, 255, 255)  # Set to white
         elif effect_type == "sparkle":
             effect = SparkleEffect()
         elif effect_type == "wave":
@@ -1183,11 +1184,11 @@ RECIPES = {
         ]
     ),
     
-    "white_strobe": Recipe(
-        name="White Strobe",
-        description="Pure white strobe at specified frequency",
+    "color_strobe": Recipe(
+        name="Color Strobe",
+        description="Color strobe at specified frequency",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base (will be overridden by white strobe)
+            colors=[Color(0, 0, 0)],  # Black base (will be overridden by strobe)
             mode=TransitionMode.STATIC
         ),
         effects=[
@@ -1256,10 +1257,10 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # Scanner effect
         await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
         
         # Water ripples
-        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=2.0)
+        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=3.0)
         await asyncio.sleep(4)
         
         # Glitch matrix
@@ -1272,25 +1273,44 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # Music spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
-        await asyncio.sleep(10)
+        await asyncio.sleep(8)
+        
+        # Enhanced spectrum analyzer
+        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced"], transition_time=3.0)
+        await asyncio.sleep(8)
+        
+        # TODO: allow bands as arg to the recipe
+        # Enhanced spectrum analyzer with 9 bands
+        global BANDS_OVERRIDE
+        BANDS_OVERRIDE = 9  # Override to 9 bands
+        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced"], transition_time=3.0)
+        await asyncio.sleep(8)
+        BANDS_OVERRIDE = None  # Reset to default
         
         # Music pulse effect
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
-        await asyncio.sleep(10)
+        await asyncio.sleep(8)
         
         # Stroboscopic demo: Blue/Magenta breathing vs Direct white strobe
         print("🔥 Starting stroboscopic demo...")
         
-        # Stroboscopic cycle: 10s breathing + 5s strobe (15Hz, 25Hz, 35Hz), repeat 3 times
+        # Stroboscopic cycle: 5s breathing + 5s strobe (15Hz, 25Hz, 35Hz), repeat 3 times
         strobe_frequencies = [15.0, 25.0, 35.0]
+        strobe_colors = [
+            Color(255, 255, 255),  # White
+            Color(255, 0, 0),      # Red  
+            Color(0, 0, 255)       # Blue
+        ]
+        
         for cycle in range(3):
             print(f"   Cycle {cycle + 1}/3: Breathing phase...")
             await recipe_manager.apply_recipe(RECIPES["blue_magenta_breathing"], transition_time=0.0)
             await asyncio.sleep(5.0)
             
-            print(f"   Cycle {cycle + 1}/3: Direct strobe phase...")
+            print(f"   Cycle {cycle + 1}/3: Direct {strobe_colors[cycle]} strobe phase...")
             freq = strobe_frequencies[cycle]
-            await controller.trigger_strobe(freq, 5.0)  # Direct hardware strobe
+            color = strobe_colors[cycle]
+            await controller.trigger_strobe(freq, 5.0, color)  # Direct hardware strobe with color
         
         # Back to sunset_breathing (smooth transition)
         await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
@@ -1304,7 +1324,7 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
     finally:
         await controller.stop()
 
-async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False):
+async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False, strobe_color: Color = Color(255, 255, 255)):
     """Run a single recipe continuously"""
     if recipe_name not in RECIPES:
         print(f"❌ Recipe '{recipe_name}' not found!")
@@ -1315,9 +1335,10 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simul
     await controller.start()
     
     try:
-        # Special handling for white_strobe - use direct hardware strobe
-        if recipe_name == "white_strobe":
-            print(f"🔥 Direct white strobe mode at {STROBE_FREQ} Hz")
+        # Special handling for color_strobe - use direct hardware strobe
+        if recipe_name == "color_strobe":
+            print(f"🔥 Direct color strobe mode at {STROBE_FREQ} Hz")
+            print(f"   Color: RGB({strobe_color.r}, {strobe_color.g}, {strobe_color.b})")
             print("Press Ctrl+C to stop")
             print("🚫 BYPASSING PIPELINE - Direct hardware control")
             
@@ -1325,7 +1346,7 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simul
             
             # Continuous direct strobe in 3-second bursts
             while True:
-                await controller.trigger_strobe(STROBE_FREQ, 3.0)  # 3 second bursts
+                await controller.trigger_strobe(STROBE_FREQ, 3.0, strobe_color)  # 3 second bursts
                 
         else:
             # Normal recipe handling
@@ -1483,6 +1504,7 @@ async def main():
     parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
     parser.add_argument('--bands', type=int, help='Override number of frequency bands (default: recipe setting)')
     parser.add_argument('--strobe-freq', type=float, default=15.0, help='White strobe frequency in Hz (default: 15.0)')
+    parser.add_argument('--strobe-color', type=str, default='255,255,255', help='Strobe color as R,G,B (default: 255,255,255 for white)')
     parser.add_argument('--fps', type=int, help=f'Pipeline FPS for effect calculations (default: {PIPELINE_FPS})')
     parser.add_argument('--set-led-range', type=str, help='Light up LED range: "5" (single LED) or "5,10" (range from 5 to 10)')
     parser.add_argument('--led-crawl', action='store_true', help='LED crawl mode - progressively light up LEDs with blinking')
@@ -1505,6 +1527,16 @@ async def main():
     else:
         print(f"  FPS: {PIPELINE_FPS} (default)")
 
+    # Parse strobe color
+    try:
+        r, g, b = map(int, args.strobe_color.split(','))
+        strobe_color = Color(r, g, b)
+        print(f"  Strobe color: RGB({r}, {g}, {b})")
+    except ValueError:
+        print(f"❌ Invalid strobe color format: {args.strobe_color}")
+        print("   Use format: R,G,B (e.g., 255,0,0 for red)")
+        return
+    
     # Set audio sampling rate
     global SAMPLING_RATE, BANDS_OVERRIDE, STROBE_FREQ
     STROBE_FREQ = args.strobe_freq
@@ -1543,7 +1575,7 @@ async def main():
         await led_crawl(args.pixels, args.crawl_blink_time, force_simulation)
     elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
-        await run_single_recipe(args.recipe, args.pixels, force_simulation)
+        await run_single_recipe(args.recipe, args.pixels, force_simulation, strobe_color)
     else:
         print(f"  Mode: Full demo sequence")
         await demo_recipe_transitions(args.pixels, force_simulation)
