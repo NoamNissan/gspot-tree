@@ -1065,6 +1065,18 @@ RECIPES = {
             EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6, "growth_pattern": "center_out"})
         ]
     ),
+
+    "spectrum_enhanced_9": Recipe(
+        name="Enhanced Spectrum Analyzer (9-Band)",
+        description="Enhanced real-time audio spectrum visualization with 9 bands",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 9})
+        ]
+    ),
     
     "music_pulse": Recipe(
         name="Music Pulse",
@@ -1383,7 +1395,7 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # Transition to rainbow_wave
         await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(6)  # Reduced from 8
         
         # LedFx-style spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
@@ -1430,23 +1442,23 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # Digital rain
         await recipe_manager.apply_recipe(RECIPES["digital_rain"], transition_time=2.0)
-        await asyncio.sleep(4)
+        await asyncio.sleep(5)
         
         # Music spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
         await asyncio.sleep(8)
         
+        # Music spectrum analyzer
+        await recipe_manager.apply_recipe(RECIPES["music_spectrum_c"], transition_time=3.0)
+        await asyncio.sleep(8)
+
         # Enhanced spectrum analyzer
-        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced"], transition_time=3.0)
+        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_c"], transition_time=3.0)
         await asyncio.sleep(8)
         
-        # TODO: allow bands as arg to the recipe
         # Enhanced spectrum analyzer with 9 bands
-        global BANDS_OVERRIDE
-        BANDS_OVERRIDE = 9  # Override to 9 bands
-        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced"], transition_time=3.0)
+        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_9"], transition_time=3.0)
         await asyncio.sleep(8)
-        BANDS_OVERRIDE = None  # Reset to default
         
         # Music pulse effect
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
@@ -1662,7 +1674,7 @@ async def main():
     
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
-    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_spectrum_c, spectrum_enhanced, spectrum_enhanced_c, music_pulse)')
+    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_spectrum_c, spectrum_enhanced, spectrum_enhanced_c, spectrum_enhanced_9, music_pulse)')
     parser.add_argument('--bands', type=int, help='Override number of frequency bands (default: recipe setting)')
     parser.add_argument('--strobe-freq', type=float, default=15.0, help='White strobe frequency in Hz (default: 15.0)')
     parser.add_argument('--strobe-color', type=str, default='255,255,255', help='Strobe color as R,G,B (default: 255,255,255 for white)')
