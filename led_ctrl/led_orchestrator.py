@@ -306,6 +306,9 @@ class MusicVisualizerEffect(Effect):
             'growth_pattern': 'bottom_up'  # 'bottom_up' or 'center_out'
         }
         
+        # Initialize boolean flags via update_parameters
+        self.update_parameters({})
+    
     def update_parameters(self, new_params: Dict[str, Any]):
         """Update effect parameters and recompute cached flags"""
         super().update_parameters(new_params)
@@ -1023,7 +1026,19 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5})
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "color_morph": False})
+        ]
+    ),
+
+    "music_spectrum_c": Recipe(
+        name="Music Spectrum Analyzer (Center-Out)",
+        description="Real-time audio spectrum visualization growing from center",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "growth_pattern": "center_out"})
         ]
     ),
     
@@ -1036,6 +1051,18 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6})
+        ]
+    ),
+
+    "spectrum_enhanced_c": Recipe(
+        name="Enhanced Spectrum Analyzer (Center-Out)",
+        description="Enhanced real-time audio spectrum visualization growing from center",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6, "growth_pattern": "center_out"})
         ]
     ),
     
@@ -1634,7 +1661,7 @@ async def main():
     
     parser = argparse.ArgumentParser(description='Recipe System Demo')
     parser.add_argument('--pixels', type=int, default=100, help='Number of pixels (default: 100)')
-    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_pulse)')
+    parser.add_argument('--recipe', type=str, help='Run specific recipe directly (complex_demo, sunset_breathing, rainbow_wave, rainbow, music_spectrum, music_spectrum_c, spectrum_enhanced, spectrum_enhanced_c, music_pulse)')
     parser.add_argument('--bands', type=int, help='Override number of frequency bands (default: recipe setting)')
     parser.add_argument('--strobe-freq', type=float, default=15.0, help='White strobe frequency in Hz (default: 15.0)')
     parser.add_argument('--strobe-color', type=str, default='255,255,255', help='Strobe color as R,G,B (default: 255,255,255 for white)')
