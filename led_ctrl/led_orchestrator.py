@@ -1314,7 +1314,7 @@ RECIPES = {
         name="Digital Rain",
         description="Matrix-style digital rain",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 255, 0)],  # Green
+            colors=[Color(0, 20, 0)],  # Very very dark green
             mode=TransitionMode.STATIC
         ),
         effects=[
