@@ -1159,7 +1159,7 @@ RECIPES = {
         base_colors=BaseColorConfig(
             colors=[Color(255, 100, 0), Color(255, 0, 0)],  # Orange to red
             mode=TransitionMode.FADE,
-            speed=0.1
+            speed=0.8
         ),
         effects=[
             EffectConfig("fire", {"speed": 0.06, "intensity": 10})
