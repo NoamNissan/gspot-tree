@@ -979,7 +979,7 @@ RECIPES = {
         name="Sunset Breathing",
         description="Calm red-pink transition with breathing and flashes",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 0, 0), Color(255, 192, 203)],
+            colors=[Color(255, 0, 0), Color(150, 0, 150)],
             mode=TransitionMode.FADE,
             speed=0.1
         ),
