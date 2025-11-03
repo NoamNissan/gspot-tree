@@ -395,6 +395,41 @@ class FadeEffect(Effect):
             ))
         return result
 
+class CircleScanEffect(Effect):
+    """Circular scanner effect that wraps around"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 2.0,
+            'width': 5
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Calculate scanner position (wraps around instead of bouncing)
+        cycle_time = 2.0 / self.parameters['speed']
+        phase = (elapsed % cycle_time) / cycle_time
+        scanner_pos = phase * (num_pixels - 1)  # 0 to (num_pixels - 1), same as ScanEffect
+        
+        # Create scanner beam (exact same as ScanEffect)
+        positions = np.arange(num_pixels)
+        distances = np.abs(positions - scanner_pos)
+        intensities = np.maximum(0, 1 - distances / self.parameters['width'])
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensities[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
 class ScanEffect(Effect):
     """Scanner/cylon eye effect"""
     

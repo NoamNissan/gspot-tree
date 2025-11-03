@@ -28,7 +28,7 @@ from constants import PERSISTENT_GUI_PORT
 from pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, ColorStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
-    FireEffect, MeltEffect, FadeEffect, ScanEffect, MarchingEffect, BlocksEffect,
+    FireEffect, MeltEffect, FadeEffect, ScanEffect, CircleScanEffect, MarchingEffect, BlocksEffect,
     CrawlerEffect, WaterEffect, GlitchEffect, MetroEffect, PowerEffect, RainEffect, WalkingEffect,
     BlendMode, Effect, PIPELINE_FPS
 )
@@ -585,6 +585,8 @@ class RecipeManager:
             effect = FadeEffect()
         elif effect_type == "scan":
             effect = ScanEffect()
+        elif effect_type == "circle_scan":
+            effect = CircleScanEffect()
         elif effect_type == "marching":
             effect = MarchingEffect()
         elif effect_type == "blocks":
@@ -1031,6 +1033,18 @@ RECIPES = {
         ]
     ),
     
+    "circle_scanner": Recipe(
+        name="Circle Scanner",
+        description="Circular scanner that wraps around the strip",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 255, 255)],  # White
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("circle_scan", {"speed": 3.0, "width": 8})
+        ]
+    ),
+
     "scanner": Recipe(
         name="Scanner",
         description="Cylon eye scanner effect",
@@ -1260,18 +1274,22 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # New effects showcase
         print("🔥 Showcasing new effects...")
-        
+
+        # Circle scanner effect
+        await recipe_manager.apply_recipe(RECIPES["circle_scanner"], transition_time=0.0)
+        await asyncio.sleep(5)
+
         # Fire effect
         await recipe_manager.apply_recipe(RECIPES["fire_demo"], transition_time=2.0)
         await asyncio.sleep(4)
         
         # Scanner effect
         await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
-        await asyncio.sleep(5)
-        
-        # Water ripples
-        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=3.0)
         await asyncio.sleep(4)
+
+        # Water ripples
+        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=4.0)
+        await asyncio.sleep(5)
         
         # Glitch matrix
         await recipe_manager.apply_recipe(RECIPES["glitch_matrix"], transition_time=1.0)
