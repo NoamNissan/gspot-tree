@@ -300,8 +300,21 @@ class MusicVisualizerEffect(Effect):
         self.audio_provider = audio_provider
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
-            'sensitivity': 1.5      # Audio sensitivity multiplier
+            'sensitivity': 1.5,     # Audio sensitivity multiplier
+            'color_cycle_period': 5.0  # Color change period in seconds
         }
+        
+        # Color palette for spectrum cycling
+        self.spectrum_colors = [
+            (255, 0, 0),    # Red
+            (0, 255, 0),    # Green  
+            (0, 0, 255),    # Blue
+            (255, 255, 0),  # Yellow
+            (255, 0, 255),  # Magenta
+            (0, 255, 255),  # Cyan
+            (255, 128, 0),  # Orange
+            (128, 0, 255),  # Purple
+        ]
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
         if not self.audio_provider.running:
@@ -320,9 +333,9 @@ class MusicVisualizerEffect(Effect):
         mode = self.parameters['mode']
         
         if mode == 'spectrum':
-            return self._spectrum_visualization(colors, bass, mid, high)
+            return self._spectrum_visualization(colors, bass, mid, high, elapsed)
         elif mode == 'spectrum_enhanced':
-            return self._spectrum_enhanced_visualization(colors, bass, mid, high)
+            return self._spectrum_enhanced_visualization(colors, bass, mid, high, elapsed)
         elif mode == 'pulse':
             return self._pulse_visualization(colors, overall)
         elif mode == 'wave':
@@ -332,43 +345,58 @@ class MusicVisualizerEffect(Effect):
         else:
             return colors
     
-    def _spectrum_visualization(self, colors: List[Color], bass: float, mid: float, high: float) -> List[Color]:
-        """3-band spectrum analyzer"""
+    def _get_band_colors(self, elapsed, num_bands):
+        """Get cycling colors for spectrum bands"""
+        base_index = int(elapsed / self.parameters['color_cycle_period']) % len(self.spectrum_colors)
+        band_colors = []
+        for i in range(num_bands):
+            color_index = (base_index + i) % len(self.spectrum_colors)
+            band_colors.append(self.spectrum_colors[color_index])
+        return band_colors
+    
+    def _spectrum_visualization(self, colors: List[Color], bass: float, mid: float, high: float, elapsed: float) -> List[Color]:
+        """3-band spectrum analyzer with cycling colors"""
         result = []
         pixels_per_band = len(colors) // 3
         
-        # Bass (red) - left third
+        # Get cycling colors for 3 bands
+        band_colors = self._get_band_colors(elapsed, 3)
+        
+        # Bass - left third
         bass_height = int(bass * pixels_per_band)
         for i in range(pixels_per_band):
             if i < bass_height:
                 intensity = 1.0 - (i / pixels_per_band) * 0.3
-                result.append(Color(int(255 * intensity), 0, 0))
+                r, g, b = band_colors[0]
+                result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
                 result.append(Color(0, 0, 0))
         
-        # Mid (green) - middle third
+        # Mid - middle third
         mid_height = int(mid * pixels_per_band)
         for i in range(pixels_per_band):
             if i < mid_height:
                 intensity = 1.0 - (i / pixels_per_band) * 0.3
-                result.append(Color(0, int(255 * intensity), 0))
+                r, g, b = band_colors[1]
+                result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
                 result.append(Color(0, 0, 0))
         
-        # High (blue) - right third
+        # High - right third
         high_height = int(high * pixels_per_band)
         remaining = len(colors) - len(result)
         for i in range(remaining):
             if i < high_height:
                 intensity = 1.0 - (i / remaining) * 0.3
-                result.append(Color(0, 0, int(255 * intensity)))
+                r, g, b = band_colors[2]
+                result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
                 result.append(Color(0, 0, 0))
         
         return result
     
-    def _spectrum_enhanced_visualization(self, colors: List[Color], bass: float, mid: float, high: float) -> List[Color]:
-        """Enhanced multi-band spectrum analyzer"""
+    def _spectrum_enhanced_visualization(self, colors: List[Color], bass: float, mid: float, high: float, elapsed: float) -> List[Color]:
+        """Enhanced multi-band spectrum analyzer with cycling colors"""
         result = []
         
         # Get band levels from audio provider
@@ -382,23 +410,12 @@ class MusicVisualizerEffect(Effect):
         
         pixels_per_band = len(colors) // num_bands
         
-        # Color palette for different bands
-        colors_palette = [
-            (255, 0, 0),      # Red
-            (255, 128, 0),    # Orange  
-            (255, 255, 0),    # Yellow
-            (0, 255, 0),      # Green
-            (0, 255, 255),    # Cyan
-            (0, 0, 255),      # Blue
-            (128, 0, 255),    # Purple
-            (255, 0, 255),    # Magenta
-            (255, 255, 255),  # White
-        ]
-        
+        # Get cycling colors for all bands
+        band_colors = self._get_band_colors(elapsed, num_bands)
         # Visualize each band
         for band_idx in range(num_bands):
             band_level = band_levels[band_idx]
-            color_rgb = colors_palette[band_idx % len(colors_palette)]
+            color_rgb = band_colors[band_idx]
             
             # Calculate pixels for this band
             if band_idx == num_bands - 1:
