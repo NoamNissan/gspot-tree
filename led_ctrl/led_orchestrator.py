@@ -7,6 +7,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional
 import numpy as np
+import time
 try:
     import sounddevice as sd
     AUDIO_AVAILABLE = True
@@ -46,10 +47,19 @@ class AudioData:
 class RealTimeAudioProvider:
     """Real-time audio analysis using sounddevice"""
     
-    def __init__(self, sample_rate=None, block_size=512, num_bands=3):
+    def __init__(self, sample_rate=None, block_size=512, num_bands=3, dynamic_window=1.0):
         self.sample_rate = sample_rate or SAMPLING_RATE
         self.block_size = block_size
         self.num_bands = num_bands
+        
+        # Dynamic range tracking
+        self.dynamic_window = dynamic_window
+        self.last_reset = time.time()
+        self.band_mins = [0.0] * num_bands
+        self.band_maxs = [0.0] * num_bands
+        self.prev_band_mins = [0.0] * num_bands
+        self.prev_band_maxs = [1.0] * num_bands  # Default range
+        self.first_sample = True
         
         # Audio levels (thread-safe)
         self.bass = 0.0
@@ -140,14 +150,41 @@ class RealTimeAudioProvider:
                 scaled_band = min(1.0, np.log10(band_value * scale + 1) / np.log10(2))
                 scaled_bands.append(scaled_band)
             
-            # Update band levels
-            self.band_levels = scaled_bands
+            # Dynamic range processing
+            current_time = time.inputBufferAdcTime
             
-            # Legacy compatibility - use first 3 bands
-            bass = scaled_bands[0] if len(scaled_bands) > 0 else 0.0
-            mid = scaled_bands[1] if len(scaled_bands) > 1 else 0.0
-            high = scaled_bands[2] if len(scaled_bands) > 2 else 0.0
-            overall = sum(scaled_bands) / len(scaled_bands) if scaled_bands else 0.0
+            # Reset every window period
+            if current_time - self.last_reset > self.dynamic_window or self.first_sample:
+                # Save current range for scaling
+                if not self.first_sample:
+                    self.prev_band_mins = self.band_mins.copy()
+                    self.prev_band_maxs = self.band_maxs.copy()
+                
+                # Start new accumulation
+                self.band_mins = scaled_bands.copy()
+                self.band_maxs = scaled_bands.copy()
+                self.last_reset = current_time
+                self.first_sample = False
+            else:
+                # Accumulate current window
+                for i in range(len(scaled_bands)):
+                    self.band_mins[i] = min(self.band_mins[i], scaled_bands[i])
+                    self.band_maxs[i] = max(self.band_maxs[i], scaled_bands[i])
+            
+            # Normalize using previous window's range
+            normalized_bands = []
+            for i in range(len(scaled_bands)):
+                normalized = self._normalize_level(scaled_bands[i], self.prev_band_mins[i], self.prev_band_maxs[i])
+                normalized_bands.append(normalized)
+            
+            # Update band levels with normalized values
+            self.band_levels = normalized_bands
+            
+            # Legacy compatibility - use first 3 bands (normalized)
+            bass = normalized_bands[0] if len(normalized_bands) > 0 else 0.0
+            mid = normalized_bands[1] if len(normalized_bands) > 1 else 0.0
+            high = normalized_bands[2] if len(normalized_bands) > 2 else 0.0
+            overall = sum(normalized_bands) / len(normalized_bands) if normalized_bands else 0.0
             
             # Simple beat detection (bass spike)
             current_time = time.inputBufferAdcTime
@@ -167,6 +204,14 @@ class RealTimeAudioProvider:
             
         except Exception as e:
             print(f"Audio processing error: {e}")
+    
+    def _normalize_level(self, value, min_val, max_val):
+        """Normalize value using min/max range"""
+        range_size = max_val - min_val
+        if range_size < 0.01:  # Prevent division by zero
+            return 0.5
+        normalized = (value - min_val) / range_size
+        return max(0.0, min(1.0, normalized))
     
     def start(self):
         """Start real-time audio capture with device detection"""
