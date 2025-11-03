@@ -302,8 +302,15 @@ class MusicVisualizerEffect(Effect):
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
             'sensitivity': 1.5,     # Audio sensitivity multiplier
             'color_cycle_period': 5.0,  # Color change period in seconds
-            'color_morph': True  # Smooth morphing vs discrete jumps
+            'color_morph': True,  # Smooth morphing vs discrete jumps
+            'growth_pattern': 'bottom_up'  # 'bottom_up' or 'center_out'
         }
+        
+    def update_parameters(self, new_params: Dict[str, Any]):
+        """Update effect parameters and recompute cached flags"""
+        super().update_parameters(new_params)
+        self._center_out_growth = self.parameters.get('growth_pattern') == 'center_out'
+        self._color_morph = self.parameters.get('color_morph', True)
         
         # Color palette for spectrum cycling
         self.spectrum_colors = [
@@ -350,7 +357,7 @@ class MusicVisualizerEffect(Effect):
         """Get cycling colors for spectrum bands"""
         period = self.parameters['color_cycle_period']
         
-        if self.parameters['color_morph']:
+        if self._color_morph:
             # Smooth morphing between colors
             cycle_position = (elapsed / period) % len(self.spectrum_colors)
             base_index = int(cycle_position)
@@ -381,6 +388,16 @@ class MusicVisualizerEffect(Effect):
                 band_colors.append(self.spectrum_colors[color_index])
             return band_colors
     
+    def _should_light_pixel(self, pixel_index, height, segment_size):
+        """Determine if pixel should be lit based on growth pattern"""
+        if self._center_out_growth:
+            center = segment_size // 2
+            distance_from_center = abs(pixel_index - center)
+            max_distance = height // 2
+            return distance_from_center <= max_distance
+        else:  # bottom_up
+            return pixel_index < height
+    
     def _spectrum_visualization(self, colors: List[Color], bass: float, mid: float, high: float, elapsed: float) -> List[Color]:
         """3-band spectrum analyzer with cycling colors"""
         result = []
@@ -392,8 +409,8 @@ class MusicVisualizerEffect(Effect):
         # Bass - left third
         bass_height = int(bass * pixels_per_band)
         for i in range(pixels_per_band):
-            if i < bass_height:
-                intensity = 1.0 - (i / pixels_per_band) * 0.3
+            if self._should_light_pixel(i, bass_height, pixels_per_band):
+                intensity = 1.0 - (abs(i - pixels_per_band // 2) / pixels_per_band) * 0.3 if self.parameters['growth_pattern'] == 'center_out' else 1.0 - (i / pixels_per_band) * 0.3
                 r, g, b = band_colors[0]
                 result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
@@ -402,8 +419,8 @@ class MusicVisualizerEffect(Effect):
         # Mid - middle third
         mid_height = int(mid * pixels_per_band)
         for i in range(pixels_per_band):
-            if i < mid_height:
-                intensity = 1.0 - (i / pixels_per_band) * 0.3
+            if self._should_light_pixel(i, mid_height, pixels_per_band):
+                intensity = 1.0 - (abs(i - pixels_per_band // 2) / pixels_per_band) * 0.3 if self.parameters['growth_pattern'] == 'center_out' else 1.0 - (i / pixels_per_band) * 0.3
                 r, g, b = band_colors[1]
                 result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
@@ -413,8 +430,8 @@ class MusicVisualizerEffect(Effect):
         high_height = int(high * pixels_per_band)
         remaining = len(colors) - len(result)
         for i in range(remaining):
-            if i < high_height:
-                intensity = 1.0 - (i / remaining) * 0.3
+            if self._should_light_pixel(i, high_height, remaining):
+                intensity = 1.0 - (abs(i - remaining // 2) / remaining) * 0.3 if self.parameters['growth_pattern'] == 'center_out' else 1.0 - (i / remaining) * 0.3
                 r, g, b = band_colors[2]
                 result.append(Color(int(r * intensity), int(g * intensity), int(b * intensity)))
             else:
@@ -454,7 +471,7 @@ class MusicVisualizerEffect(Effect):
             # Light up pixels based on band level
             band_height = int(band_level * pixels_in_band)
             for i in range(pixels_in_band):
-                if i < band_height:
+                if self._should_light_pixel(i, band_height, pixels_in_band):
                     intensity = 1.0 - (i / pixels_in_band) * 0.3
                     result.append(Color(
                         int(color_rgb[0] * intensity),
