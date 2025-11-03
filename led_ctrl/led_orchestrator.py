@@ -1077,6 +1077,114 @@ RECIPES = {
             EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 9})
         ]
     ),
+
+    "spectrum_enhanced_9_c": Recipe(
+        name="Enhanced Spectrum Analyzer (9-Band Center-Out)",
+        description="Enhanced 9-band spectrum visualization growing from center",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 9, "growth_pattern": "center_out"})
+        ]
+    ),
+
+    "spectrum_enhanced_12": Recipe(
+        name="Enhanced Spectrum Analyzer (12-Band)",
+        description="Enhanced real-time audio spectrum visualization with 12 bands",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 12})
+        ]
+    ),
+
+    "spectrum_enhanced_12_c": Recipe(
+        name="Enhanced Spectrum Analyzer (12-Band Center-Out)",
+        description="Enhanced 12-band spectrum visualization growing from center",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 12, "growth_pattern": "center_out"})
+        ]
+    ),
+
+    "music_spectrum_morph": Recipe(
+        name="Music Spectrum (Morphing Colors)",
+        description="3-band spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "color_morph": True})
+        ]
+    ),
+
+    "music_spectrum_c_morph": Recipe(
+        name="Music Spectrum Center-Out (Morphing Colors)",
+        description="3-band center-out spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "growth_pattern": "center_out", "color_morph": True})
+        ]
+    ),
+
+    "spectrum_enhanced_morph": Recipe(
+        name="Enhanced Spectrum (Morphing Colors)",
+        description="6-band spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6, "color_morph": True})
+        ]
+    ),
+
+    "spectrum_enhanced_c_morph": Recipe(
+        name="Enhanced Spectrum Center-Out (Morphing Colors)",
+        description="6-band center-out spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6, "growth_pattern": "center_out", "color_morph": True})
+        ]
+    ),
+
+    "spectrum_enhanced_9_morph": Recipe(
+        name="Enhanced Spectrum 9-Band (Morphing Colors)",
+        description="9-band spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 9, "color_morph": True})
+        ]
+    ),
+
+    "spectrum_enhanced_12_morph": Recipe(
+        name="Enhanced Spectrum 12-Band (Morphing Colors)",
+        description="12-band spectrum with smooth color transitions",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 12, "color_morph": True})
+        ]
+    ),
     
     "music_pulse": Recipe(
         name="Music Pulse",
