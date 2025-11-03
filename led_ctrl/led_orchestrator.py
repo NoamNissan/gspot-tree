@@ -1075,7 +1075,8 @@ RECIPES = {
             speed=0.2
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0})  # Much lower sensitivity
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),  # Much lower sensitivity
+            EffectConfig("random_flash", {"frequency": 2.0})
         ]
     ),
     
