@@ -301,7 +301,8 @@ class MusicVisualizerEffect(Effect):
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
             'sensitivity': 1.5,     # Audio sensitivity multiplier
-            'color_cycle_period': 5.0  # Color change period in seconds
+            'color_cycle_period': 5.0,  # Color change period in seconds
+            'color_morph': True  # Smooth morphing vs discrete jumps
         }
         
         # Color palette for spectrum cycling
@@ -347,12 +348,38 @@ class MusicVisualizerEffect(Effect):
     
     def _get_band_colors(self, elapsed, num_bands):
         """Get cycling colors for spectrum bands"""
-        base_index = int(elapsed / self.parameters['color_cycle_period']) % len(self.spectrum_colors)
-        band_colors = []
-        for i in range(num_bands):
-            color_index = (base_index + i) % len(self.spectrum_colors)
-            band_colors.append(self.spectrum_colors[color_index])
-        return band_colors
+        period = self.parameters['color_cycle_period']
+        
+        if self.parameters['color_morph']:
+            # Smooth morphing between colors
+            cycle_position = (elapsed / period) % len(self.spectrum_colors)
+            base_index = int(cycle_position)
+            blend_factor = cycle_position - base_index
+            
+            band_colors = []
+            for i in range(num_bands):
+                current_idx = (base_index + i) % len(self.spectrum_colors)
+                next_idx = (base_index + i + 1) % len(self.spectrum_colors)
+                
+                current_color = self.spectrum_colors[current_idx]
+                next_color = self.spectrum_colors[next_idx]
+                
+                # Blend between current and next color
+                blended_color = (
+                    int(current_color[0] * (1 - blend_factor) + next_color[0] * blend_factor),
+                    int(current_color[1] * (1 - blend_factor) + next_color[1] * blend_factor),
+                    int(current_color[2] * (1 - blend_factor) + next_color[2] * blend_factor)
+                )
+                band_colors.append(blended_color)
+            return band_colors
+        else:
+            # Discrete jumps (original behavior)
+            base_index = int(elapsed / period) % len(self.spectrum_colors)
+            band_colors = []
+            for i in range(num_bands):
+                color_index = (base_index + i) % len(self.spectrum_colors)
+                band_colors.append(self.spectrum_colors[color_index])
+            return band_colors
     
     def _spectrum_visualization(self, colors: List[Color], bass: float, mid: float, high: float, elapsed: float) -> List[Color]:
         """3-band spectrum analyzer with cycling colors"""
