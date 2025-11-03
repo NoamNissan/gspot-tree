@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 LED Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #555;
+            margin: 30px 0 20px 0;
+            font-size: 1.5em;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .status.running {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.stopped {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .controls {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .pixel-control {
+            margin-bottom: 20px;
+        }
+        
+        .pixel-control label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .pixel-control input {
+            width: 100px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .recipe-grid, .song-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .song-grid {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+        
+        .recipe-card, .song-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .recipe-card:hover, .song-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        
+        .recipe-card.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .song-card.active {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border-color: #28a745;
+        }
+        
+        .recipe-name, .song-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .song-name {
+            font-size: 1em;
+        }
+        
+        .recipe-description {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .stop-btn, .stop-music-btn {
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        .stop-btn {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .stop-btn:hover {
+            background: #c82333;
+        }
+        
+        .stop-music-btn {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .stop-music-btn:hover {
+            background: #5a6268;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .no-songs {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .recipe-grid, .song-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 LED Controller</h1>
+        
+        <div id="led-status" class="status stopped">
+            ⏹️ LEDs Stopped
+        </div>
+        
+        <div id="music-status" class="status stopped">
+            🎵 No Music Playing
+        </div>
+        
+        <div class="controls">
+            <div class="pixel-control">
+                <label for="pixels">Number of LEDs:</label>
+                <input type="number" id="pixels" value="60" min="1" max="300">
+            </div>
+        </div>
+        
+        <h2>🎨 LED Effects</h2>
+        <div class="recipe-grid">
+            {% for recipe in recipes %}
+            <div class="recipe-card" data-recipe="{{ recipe.id }}">
+                <div class="recipe-name">{{ recipe.name }}</div>
+                <div class="recipe-description">{{ recipe.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <button class="stop-btn" onclick="stopRecipe()">🛑 Stop LED Effects</button>
+        
+        <h2>🎵 Music</h2>
+        {% if songs %}
+        <div class="song-grid">
+            {% for song in songs %}
+            <div class="song-card" data-song="{{ song.filename }}">
+                <div class="song-name">{{ song.name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-songs">
+            No songs found in /home/tao/repo/gspot-tree/songs/<br>
+            Add .mp3, .wav, .m4a, or .flac files to play music
+        </div>
+        {% endif %}
+        
+        <button class="stop-music-btn" onclick="stopMusic()">🎵 Stop Music</button>
+    </div>
+
+    <script>
+        let currentRecipe = null;
+        let currentSong = null;
+        
+        // Update status
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const ledStatusEl = document.getElementById('led-status');
+                    const musicStatusEl = document.getElementById('music-status');
+                    const recipeCards = document.querySelectorAll('.recipe-card');
+                    const songCards = document.querySelectorAll('.song-card');
+                    
+                    // Update LED status
+                    if (data.running && data.recipe) {
+                        ledStatusEl.className = 'status running';
+                        ledStatusEl.innerHTML = `🎨 Running: ${data.recipe}`;
+                        currentRecipe = data.recipe;
+                        
+                        // Highlight active recipe card
+                        recipeCards.forEach(card => {
+                            if (card.dataset.recipe === data.recipe) {
+                                card.classList.add('active');
+                            } else {
+                                card.classList.remove('active');
+                            }
+                        });
+                    } else {
+                        ledStatusEl.className = 'status stopped';
+                        ledStatusEl.innerHTML = '⏹️ LEDs Stopped';
+                        currentRecipe = null;
+                        recipeCards.forEach(card => card.classList.remove('active'));
+                    }
+                    
+                    // Update music status
+                    if (data.music_playing && data.current_song) {
+                        musicStatusEl.className = 'status running';
+                        const songName = data.current_song.replace(/\.[^/.]+$/, ""); // Remove extension
+                        musicStatusEl.innerHTML = `🎵 Playing: ${songName}`;
+                        currentSong = data.current_song;
+                        
+                        // Highlight active song card
+                        songCards.forEach(card => {
+                            if (card.dataset.song === data.current_song) {
+                                card.classList.add('active');
+                            } else {
+                                card.classList.remove('active');
+                            }
+                        });
+                    } else {
+                        musicStatusEl.className = 'status stopped';
+                        musicStatusEl.innerHTML = '🎵 No Music Playing';
+                        currentSong = null;
+                        songCards.forEach(card => card.classList.remove('active'));
+                    }
+                });
+        }
+        
+        // Start recipe
+        function startRecipe(recipeId) {
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            container.classList.add('loading');
+            
+            fetch(`/start/${recipeId}?pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to start recipe: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Stop recipe
+        function stopRecipe() {
+            const container = document.querySelector('.container');
+            container.classList.add('loading');
+            
+            fetch('/stop')
+                .then(response => response.json())
+                .then(data => {
+                    updateStatus();
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Play song
+        function playSong(filename) {
+            const container = document.querySelector('.container');
+            container.classList.add('loading');
+            
+            fetch(`/play/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to play song: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Stop music
+        function stopMusic() {
+            const container = document.querySelector('.container');
+            container.classList.add('loading');
+            
+            fetch('/stop_music')
+                .then(response => response.json())
+                .then(data => {
+                    updateStatus();
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Add click handlers to recipe cards
+        document.querySelectorAll('.recipe-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const recipeId = card.dataset.recipe;
+                startRecipe(recipeId);
+            });
+        });
+        
+        // Add click handlers to song cards
+        document.querySelectorAll('.song-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const filename = card.dataset.song;
+                playSong(filename);
+            });
+        });
+        
+        // Update status every 2 seconds
+        setInterval(updateStatus, 2000);
+        updateStatus();
+    </script>
+</body>
+</html>
