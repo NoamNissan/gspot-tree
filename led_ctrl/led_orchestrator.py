@@ -255,8 +255,7 @@ class MusicVisualizerEffect(Effect):
         self.audio_provider = audio_provider
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
-            'sensitivity': 1.5,     # Audio sensitivity multiplier
-            'bass_boost': 2.0       # Extra bass emphasis
+            'sensitivity': 1.5      # Audio sensitivity multiplier
         }
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
@@ -266,8 +265,8 @@ class MusicVisualizerEffect(Effect):
         # Get real-time audio data
         audio_data = self.audio_provider.get_current_audio_data()
         
-        # Apply sensitivity and bass boost
-        bass = min(1.0, audio_data.bass * self.parameters['sensitivity'] * self.parameters['bass_boost'])
+        # Apply sensitivity
+        bass = min(1.0, audio_data.bass * self.parameters['sensitivity'])
         mid = min(1.0, audio_data.mid * self.parameters['sensitivity'])
         high = min(1.0, audio_data.high * self.parameters['sensitivity'])
         overall = min(1.0, audio_data.overall * self.parameters['sensitivity'])
@@ -918,7 +917,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "bass_boost": 2.0})
+            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5})
         ]
     ),
     
@@ -930,7 +929,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "bass_boost": 2.0, "num_bands": 6})
+            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6})
         ]
     ),
     
