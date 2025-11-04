@@ -956,7 +956,7 @@ class EffectPipeline:
 class PipelineController:
     """High-level controller for the effects pipeline"""
     
-    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = True):
+    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = False):
         self.num_pixels = num_pixels
         self.pipeline = EffectPipeline(num_pixels)
         
@@ -1135,7 +1135,7 @@ class PipelineController:
 
 async def recipe_demo1():
     """Demonstrate the pipeline system"""
-    controller = PipelineController(100, force_simulation=True)
+    controller = PipelineController(100, force_simulation=False)
     await controller.start()
     
     try:
@@ -1187,7 +1187,7 @@ async def recipe_demo1():
 
 async def recipe_demo2():
     """Red-pink transition with breathing effect"""
-    controller = PipelineController(100, force_simulation=True)
+    controller = PipelineController(100, force_simulation=False)
     await controller.start()
     
     try:
@@ -1197,11 +1197,13 @@ async def recipe_demo2():
         print("🔴🩷 Recipe Demo 2: Red-Pink Transition + Breathing")
         
         # Set up red-pink fade transition with breathing
-        red_pink_colors = [Color(255, 0, 0), Color(255, 192, 203)]
-        controller.pipeline.set_base_colors(red_pink_colors, TransitionMode.FADE, speed=0.1)
+        #red_pink_colors = [Color(255, 0, 0), Color(255, 192, 203)]
+        red_pink_colors = [Color(255, 0, 0), Color(150, 0, 150)]
+        
+        controller.pipeline.set_base_colors(red_pink_colors, TransitionMode.FADE, speed=0.01)
         
         # Add breathing effect
-        breathing_id = controller.add_breathing(speed=0.3, min_intensity=0.2)
+        breathing_id = controller.add_breathing(speed=0.1, min_intensity=0.1, max_intensity=1)
         
         # Add random flash effect (2Hz white flashes)
         flash_id = controller.add_random_flash(frequency=2.0)
