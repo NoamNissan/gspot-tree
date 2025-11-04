@@ -171,6 +171,53 @@
             background: #5a6268;
         }
         
+        .strobe-controls {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .control-group label {
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .control-group input, .control-group select {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #555;
+            background: #1a1a1a;
+            color: white;
+            font-size: 1em;
+        }
+        
+        .strobe-btn {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .strobe-btn:hover {
+            background: #e55a2b;
+        }
+        
         .loading {
             opacity: 0.6;
             pointer-events: none;
@@ -228,6 +275,29 @@
         </div>
         
         <button class="stop-btn" onclick="stopRecipe()">🛑 Stop LED Effects</button>
+        
+        <h2>⚡ Strobe Control</h2>
+        <div class="strobe-controls">
+            <div class="control-group">
+                <label for="strobe-freq">Frequency (Hz):</label>
+                <input type="number" id="strobe-freq" value="25" min="5" max="50" step="1">
+            </div>
+            
+            <div class="control-group">
+                <label for="strobe-color">Color:</label>
+                <select id="strobe-color">
+                    <option value="255,255,255" selected>⚪ White</option>
+                    <option value="255,0,0">🔴 Red</option>
+                    <option value="0,255,0">🟢 Green</option>
+                    <option value="0,0,255">🔵 Blue</option>
+                    <option value="255,255,0">🟡 Yellow</option>
+                    <option value="255,0,255">🟣 Purple</option>
+                    <option value="0,255,255">🔵 Cyan</option>
+                </select>
+            </div>
+            
+            <button class="strobe-btn" onclick="startStrobe()">⚡ Start Strobe</button>
+        </div>
         
         <h2>🎵 Music</h2>
         {% if songs %}
@@ -343,6 +413,33 @@
                 })
                 .catch(error => {
                     alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Start strobe
+        function startStrobe() {
+            const freq = document.getElementById('strobe-freq').value;
+            const color = document.getElementById('strobe-color').value;
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            container.classList.add('loading');
+            
+            fetch(`/strobe?freq=${freq}&color=${color}&pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to start strobe: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error starting strobe');
                 })
                 .finally(() => {
                     container.classList.remove('loading');

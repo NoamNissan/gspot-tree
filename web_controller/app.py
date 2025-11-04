@@ -128,6 +128,36 @@ def run_recipe(recipe_id, pixels=60):
         print(f"Error starting recipe {recipe_id}: {e}")
         return False
 
+def run_recipe_with_params(recipe_id, pixels, freq, color):
+    """Run LED orchestrator with recipe and custom parameters"""
+    global current_process, current_recipe
+    
+    # Kill any existing process
+    kill_current_process()
+    
+    # Start new process with parameters
+    cmd = [
+        "python3", 
+        "../led_ctrl/led_orchestrator.py", 
+        "--recipe", recipe_id,
+        "--pixels", str(pixels),
+        "--strobe-freq", str(freq),
+        "--strobe-color", color
+    ]
+    
+    try:
+        current_process = subprocess.Popen(
+            cmd, 
+            cwd="/home/tao/repo/gspot-tree/web_controller",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        current_recipe = f"{recipe_id} ({freq}Hz {color})"
+        return True
+    except Exception as e:
+        print(f"Error starting strobe: {e}")
+        return False
+
 def play_song(filename):
     """Play a song using mpg123 or aplay"""
     global music_process, current_song
@@ -199,6 +229,19 @@ def stop_music():
     """Stop current music"""
     kill_music_process()
     return jsonify({"status": "success", "message": "Music stopped"})
+
+@app.route('/strobe')
+def start_strobe():
+    """Start color strobe with custom frequency and color"""
+    freq = request.args.get('freq', 25, type=float)
+    color = request.args.get('color', '255,255,255')
+    pixels = request.args.get('pixels', 60, type=int)
+    
+    # Use color_strobe recipe with parameters
+    if run_recipe_with_params('color_strobe', pixels, freq, color):
+        return jsonify({"status": "success", "frequency": freq, "color": color})
+    else:
+        return jsonify({"status": "error", "message": "Failed to start strobe"}), 500
 
 @app.route('/status')
 def get_status():
