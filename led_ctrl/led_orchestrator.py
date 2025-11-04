@@ -608,8 +608,8 @@ class RecipeManager:
         
         await asyncio.sleep(transition_time)
     
-    async def _transition_effects(self, new_effects: List[EffectConfig], transition_time: float):
-        """Smart effect transitions"""
+    async def _transition_effects(self, new_effects: List[EffectConfig], transition_time: float, window_size: int = 2):
+        """Smart effect transitions with blended swapping"""
         print(f"⚡ Transitioning effects...")
         
         # Categorize effects
@@ -623,37 +623,50 @@ class RecipeManager:
         # Effects to add
         add_effects = new_effect_types - current_effect_types
         
-        # Step 1: Update existing effects
+        # Step 1: Update existing effects that are kept
         for effect_config in new_effects:
             if effect_config.effect_type in keep_effects:
                 await self._update_effect_parameters(effect_config)
         
-        # Step 2: Gradually remove old effects
-        removal_delay = transition_time / max(len(remove_effects), 1) if remove_effects else 0
-        for effect_type in remove_effects:
-            print(f"  🗑️ Removing {effect_type}")
-            if effect_type in self.active_effects:
-                effect_id = self.active_effects[effect_type]
-                removed = self.controller.pipeline.remove_effect(effect_id)
-                if removed:
-                    del self.active_effects[effect_type]
-                    print(f"    ✅ Successfully removed {effect_type}")
-                else:
-                    print(f"    ❌ Failed to remove {effect_type} (ID: {effect_id})")
-            else:
-                print(f"    ⚠️ Effect {effect_type} not in active_effects")
-            if removal_delay > 0:
-                await asyncio.sleep(removal_delay)
+        # Step 2: Blended transition - swap effects in windows
+        remove_list = list(remove_effects)
+        add_list = [e for e in new_effects if e.effect_type in add_effects and e.enabled]
         
-        # Step 3: Gradually add new effects
-        addition_delay = transition_time / max(len(add_effects), 1) if add_effects else 0
-        for effect_config in new_effects:
-            if effect_config.effect_type in add_effects and effect_config.enabled:
-                print(f"  ➕ Adding {effect_config.effect_type}")
-                effect_id = await self._create_effect(effect_config)
-                self.active_effects[effect_config.effect_type] = effect_id
-                if addition_delay > 0:
-                    await asyncio.sleep(addition_delay)
+        max_items = max(len(remove_list), len(add_list))
+        num_windows = (max_items + window_size - 1) // window_size  # Ceiling division
+        window_delay = transition_time / max(num_windows, 1) if num_windows > 0 else 0
+        
+        for window in range(num_windows):
+            start_idx = window * window_size
+            end_idx = min(start_idx + window_size, max_items)
+            
+            # Add new effects in this window
+            for i in range(start_idx, end_idx):
+                if i < len(add_list):
+                    effect_config = add_list[i]
+                    print(f"  ➕ Adding {effect_config.effect_type}")
+                    effect_id = await self._create_effect(effect_config)
+                    self.active_effects[effect_config.effect_type] = effect_id
+            
+            # Remove old effects in this window
+            for i in range(start_idx, end_idx):
+                if i < len(remove_list):
+                    effect_type = remove_list[i]
+                    print(f"  🗑️ Removing {effect_type}")
+                    if effect_type in self.active_effects:
+                        effect_id = self.active_effects[effect_type]
+                        removed = self.controller.pipeline.remove_effect(effect_id)
+                        if removed:
+                            del self.active_effects[effect_type]
+                            print(f"    ✅ Successfully removed {effect_type}")
+                        else:
+                            print(f"    ❌ Failed to remove {effect_type} (ID: {effect_id})")
+                    else:
+                        print(f"    ⚠️ Effect {effect_type} not in active_effects")
+            
+            # Wait between windows for blended transition
+            if window_delay > 0 and window < num_windows - 1:
+                await asyncio.sleep(window_delay)
     
     async def _update_effect_parameters(self, effect_config: EffectConfig):
         """Update parameters of existing effect"""
@@ -1491,15 +1504,15 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # Apply complex_demo
         await recipe_manager.apply_recipe(RECIPES["complex_demo"])
-        await asyncio.sleep(5)  # Reduced from 10
+        await asyncio.sleep(6)  # Reduced from 10
         
         # Pure rainbow effect
         await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(5)  # Reduced from 8
         
         # Transition to sunset_breathing (breathing continues, other effects change)
         await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(5)  # Reduced from 8
         
         # Transition to rainbow_wave
         await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
@@ -1507,23 +1520,23 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         
         # LedFx-style spectrum analyzer
         await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(5)  # Reduced from 8
         
         # Energy pulse effect
         await recipe_manager.apply_recipe(RECIPES["energy_pulse"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(4)  # Reduced from 6
         
         # Wavelength flow
         await recipe_manager.apply_recipe(RECIPES["wavelength_flow"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(4)  # Reduced from 6
         
         # Rainbow scroll
         await recipe_manager.apply_recipe(RECIPES["rainbow_scroll"], transition_time=2.0)
-        await asyncio.sleep(3)  # Reduced from 6
+        await asyncio.sleep(4)  # Reduced from 6
         
         # Frequency bars
         await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 8
+        await asyncio.sleep(5)  # Reduced from 8
         
         # New effects showcase
         print("🔥 Showcasing new effects...")
