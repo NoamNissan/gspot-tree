@@ -210,11 +210,35 @@ def start_recipe(recipe_id):
 
 @app.route('/stop')
 def stop_recipe():
-    """Stop current recipe"""
+    """Stop current recipe and clear all LEDs"""
     global current_recipe
     kill_current_process()
+    
+    # Wait a moment for process to fully stop
+    import time
+    time.sleep(0.2)
+    
+    # Clear all LEDs
+    pixels = request.args.get('pixels', 60, type=int)
+    try:
+        clear_cmd = [
+            "python3", 
+            "../led_ctrl/led_orchestrator.py", 
+            "--clear-all",
+            "--pixels", str(pixels)
+        ]
+        clear_process = subprocess.Popen(
+            clear_cmd,
+            cwd="/home/tao/repo/gspot-tree/web_controller",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        clear_process.wait(timeout=5)
+    except Exception:
+        pass  # If clearing fails, ignore
+    
     current_recipe = None
-    return jsonify({"status": "success", "message": "Stopped"})
+    return jsonify({"status": "success", "message": "Stopped and cleared"})
 
 @app.route('/play/<filename>')
 def play_music(filename):
