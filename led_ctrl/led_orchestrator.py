@@ -1793,6 +1793,7 @@ async def main():
     parser.add_argument('--simulation', action='store_true', help='Run in simulation mode with GUI (default: real LEDs)')
     parser.add_argument('--high-fidelity', action='store_true', help='Use 48kHz audio sampling (default: 16kHz for better compatibility)')
     parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
+    parser.add_argument('--clear-all', action='store_true', help='Clear all LEDs to black and exit')
     parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
     
     args = parser.parse_args()
@@ -1851,6 +1852,18 @@ async def main():
     if args.set_led_range:
         print(f"  Mode: Set LED Range ({args.set_led_range})")
         await set_led_range(args.set_led_range, args.pixels, force_simulation)
+    elif args.clear_all:
+        print(f"  Mode: Clear All LEDs")
+        controller = PipelineController(args.pixels, force_simulation=force_simulation)
+        await controller.start()
+        try:
+            for i in range(args.pixels):
+                controller.pixels[i] = (0, 0, 0)
+            controller.pixels.show()
+            print("✅ All LEDs cleared to black")
+        finally:
+            await controller.stop()
+        return
     elif args.led_crawl:
         print(f"  Mode: LED Crawl")
         await led_crawl(args.pixels, args.crawl_blink_time, force_simulation)
