@@ -33,7 +33,62 @@ class TreeConfig:
             leds.extend(pair)
         return leds
 
-def load_tree_config(config_path: str) -> TreeConfig:
+def process_bypassed_leds(config_data: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
+    """Process bypassed LEDs (negative numbers) and shift indices"""
+    
+    def process_structure(structure, structure_name):
+        """Process branches or rings structure"""
+        bypass_count = 0
+        processed = []
+        
+        for group_idx, group in enumerate(structure):
+            processed_group = []
+            for pair_idx, pair in enumerate(group):
+                processed_pair = []
+                for led_idx, led in enumerate(pair):
+                    if isinstance(led, int) and led < 0:
+                        # Negative number = bypassed LED
+                        if verbose:
+                            print(f"🔧 Bypass detected: LED {abs(led)} in {structure_name}[{group_idx}][{pair_idx}][{led_idx}]")
+                        bypass_count += 1
+                        # Don't add bypassed LEDs to the pair
+                    else:
+                        # Shift LED index back by bypass count
+                        shifted_led = led - bypass_count
+                        if verbose and bypass_count > 0:
+                            print(f"   Shifting LED {led} → {shifted_led} (bypass count: {bypass_count})")
+                        processed_pair.append(shifted_led)
+                
+                # Only add pairs that have LEDs
+                if processed_pair:
+                    processed_group.append(processed_pair)
+            
+            if processed_group:
+                processed.append(processed_group)
+        
+        return processed
+    
+    if verbose:
+        print("🔧 Processing bypassed LEDs...")
+    
+    processed_data = {
+        'branches': process_structure(config_data['branches'], 'branches'),
+        'rings': process_structure(config_data['rings'], 'rings')
+    }
+    
+    if verbose:
+        print("\n✅ Processed configuration:")
+        print("Branches:")
+        for i, branch in enumerate(processed_data['branches']):
+            print(f"  Branch {i}: {branch}")
+        print("Rings:")
+        for i, ring in enumerate(processed_data['rings']):
+            print(f"  Ring {i}: {ring}")
+        print()
+    
+    return processed_data
+
+def load_tree_config(config_path: str, verbose: bool = False) -> TreeConfig:
     """Load tree configuration from YAML or JSON file"""
     with open(config_path, 'r') as f:
         if config_path.endswith('.yaml') or config_path.endswith('.yml'):
@@ -41,9 +96,12 @@ def load_tree_config(config_path: str) -> TreeConfig:
         else:
             data = json.load(f)
     
+    # Process bypassed LEDs
+    processed_data = process_bypassed_leds(data, verbose)
+    
     return TreeConfig(
-        branches=data['branches'],
-        rings=data['rings']
+        branches=processed_data['branches'],
+        rings=processed_data['rings']
     )
 
 def create_example_config(output_path: str = 'tree_config.yaml'):
@@ -79,8 +137,9 @@ if __name__ == "__main__":
     # Create example configuration
     create_example_config()
     
-    # Load and test
-    config = load_tree_config('tree_config.yaml')
+    # Load and test with verbose output
+    print("Loading tree configuration with verbose output:")
+    config = load_tree_config('tree_config.yaml', verbose=True)
     
     print("Tree Configuration Loaded:")
     print(f"Rings: {len(config.rings)}")
