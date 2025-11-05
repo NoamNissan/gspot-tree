@@ -88,21 +88,36 @@ def process_bypassed_leds(config_data: Dict[str, Any], verbose: bool = False) ->
     
     return processed_data
 
-def load_tree_config(config_path: str, verbose: bool = False) -> TreeConfig:
-    """Load tree configuration from YAML or JSON file"""
+def load_tree_config(config_path: str, verbose: bool = False) -> Dict[str, List[List[int]]]:
+    """Load tree configuration and return processed structure"""
     with open(config_path, 'r') as f:
         if config_path.endswith('.yaml') or config_path.endswith('.yml'):
             data = yaml.safe_load(f)
         else:
             data = json.load(f)
     
-    # Process bypassed LEDs
+    # Process bypassed LEDs and flatten to LED indices
     processed_data = process_bypassed_leds(data, verbose)
     
-    return TreeConfig(
-        branches=processed_data['branches'],
-        rings=processed_data['rings']
-    )
+    # Convert to flat LED index lists
+    rings = []
+    for ring_pairs in processed_data['rings']:
+        ring_leds = []
+        for pair in ring_pairs:
+            ring_leds.extend(pair)
+        rings.append(ring_leds)
+    
+    branches = []
+    for branch_pairs in processed_data['branches']:
+        branch_leds = []
+        for pair in branch_pairs:
+            branch_leds.extend(pair)
+        branches.append(branch_leds)
+    
+    return {
+        'rings': rings,
+        'branches': branches
+    }
 
 def create_example_config(output_path: str = 'tree_config.yaml'):
     """Create example tree configuration file"""
