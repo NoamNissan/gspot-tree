@@ -295,9 +295,10 @@ class RealTimeAudioProvider:
 class MusicVisualizerEffect(Effect):
     """Music visualizer effect using real-time audio analysis"""
     
-    def __init__(self, audio_provider: RealTimeAudioProvider, effect_id: str = None):
+    def __init__(self, audio_provider: RealTimeAudioProvider, tree_structure=None, effect_id: str = None):
         super().__init__(effect_id)
         self.audio_provider = audio_provider
+        self.tree_structure = tree_structure
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
             'sensitivity': 1.5,     # Audio sensitivity multiplier
@@ -349,6 +350,8 @@ class MusicVisualizerEffect(Effect):
             return self._spectrum_enhanced_visualization(colors, bass, mid, high, elapsed)
         elif mode == 'pulse':
             return self._pulse_visualization(colors, overall)
+        elif mode == 'ring_amplitude':
+            return self._ring_amplitude_visualization(colors, overall, elapsed)
         elif mode == 'wave':
             return self._wave_visualization(colors, bass, elapsed)
         elif mode == 'strobe':
@@ -504,6 +507,35 @@ class MusicVisualizerEffect(Effect):
             int(c.g * pulse_intensity), 
             int(c.b * pulse_intensity)
         ) for c in colors]
+    
+    def _ring_amplitude_visualization(self, colors: List[Color], overall: float, elapsed: float) -> List[Color]:
+        """Ring amplitude effect - ring position shows audio loudness"""
+        
+        # Get configurable colors
+        background_color = self.parameters.get('background_color', Color(0, 0, 50))  # Dark blue
+        ring_color = self.parameters.get('ring_color', Color(255, 255, 255))  # White
+        
+        # Apply dramatic enhancement (same as pulse)
+        #enhanced_amplitude = overall ** 2  # Less dramatic than ** 3 for more sensitivity
+        enhanced_amplitude = overall
+        
+        # Map to 6 levels (0-5) with better sensitivity
+        level = int(enhanced_amplitude * 10)  # Multiply by 10 instead of 6 for more sensitivity
+        level = min(5, max(0, level))
+        
+        # Start with background color for all LEDs
+        result = [background_color] * len(colors)
+        
+        # If amplitude > 0 and we have tree structure, light up the appropriate ring
+        if level > 0 and self.tree_structure and hasattr(self.tree_structure, 'rings'):
+            ring_index = level - 1  # Level 1 -> Ring 0, Level 5 -> Ring 4
+            if ring_index < len(self.tree_structure.rings):
+                ring_leds = self.tree_structure.rings[ring_index]  # Flat list of LED indices
+                for led_idx in ring_leds:  # Each element is a single LED index
+                    if led_idx < len(result):
+                        result[led_idx] = ring_color
+        
+        return result
     
     def _wave_visualization(self, colors: List[Color], bass: float, elapsed: float) -> List[Color]:
         """Wave effect driven by bass"""
@@ -766,7 +798,7 @@ class RecipeManager:
                     num_bands = BANDS_OVERRIDE or effect_config.parameters.get('num_bands', 3)
                     self.audio_provider = RealTimeAudioProvider(num_bands=num_bands)
                     self.audio_provider.start()
-                effect = MusicVisualizerEffect(self.audio_provider)
+                effect = MusicVisualizerEffect(self.audio_provider, self.tree_structure)
         else:
             raise ValueError(f"Unknown effect type: {effect_type}")
         
@@ -1229,6 +1261,23 @@ RECIPES = {
         effects=[
             EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),  # Much lower sensitivity
             EffectConfig("random_flash", {"frequency": 2.0})
+        ]
+    ),
+    
+    "ring_amplitude": Recipe(
+        name="Ring Amplitude",
+        description="Ring position shows audio amplitude",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 50)],  # Dark blue background
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {
+                "mode": "ring_amplitude", 
+                "sensitivity": 1.0,
+                "background_color": Color(0, 0, 50),  # Dark blue
+                "ring_color": Color(255, 255, 255)   # White
+            })
         ]
     ),
     
