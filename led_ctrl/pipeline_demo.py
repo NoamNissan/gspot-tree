@@ -20,6 +20,30 @@ class TreeStructure:
     """Tree LED structure with rings and branches"""
     rings: List[List[int]]     # rings[ring_idx] = [led_indices...]
     branches: List[List[int]]  # branches[branch_idx] = [led_indices...]
+    
+    def __post_init__(self):
+        """Calculate skewed branches after initialization"""
+        self.skewed_branches = self._calculate_skewed_branches()
+    
+    def _calculate_skewed_branches(self) -> List[List[int]]:
+        """Create skewed branch groupings"""
+        if not self.branches:
+            return []
+        
+        # Find max branch length
+        max_length = max(len(branch) for branch in self.branches)
+        skewed = []
+        
+        for led_pos in range(max_length):
+            skewed_group = []
+            for branch_idx, branch in enumerate(self.branches):
+                # Take LED at position led_pos from branch branch_idx
+                if led_pos < len(branch):
+                    skewed_group.append(branch[led_pos])
+            if skewed_group:
+                skewed.append(skewed_group)
+        
+        return skewed
 
 # Global pipeline configuration
 PIPELINE_FPS = 240  # 240 FPS for very smooth effects
@@ -266,6 +290,205 @@ class BranchSweepEffect(Effect):
                             min(255, result[led_idx].r + int(effect_color.r * intensity)),
                             min(255, result[led_idx].g + int(effect_color.g * intensity)),
                             min(255, result[led_idx].b + int(effect_color.b * intensity))
+                        )
+        
+        return result
+
+class RainbowRingsEffect(Effect):
+    """Rainbow colors emanate through rings"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'outward',  # 'outward' or 'inward'
+            'hue_spread': 1.0  # How much hue changes between rings
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                # Calculate hue based on ring position and time
+                if direction == 'inward':
+                    ring_pos = len(self.mask) - 1 - i
+                else:
+                    ring_pos = i
+                
+                hue = (elapsed * speed + ring_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                ring_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.rings[ring_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + ring_color.r),
+                            min(255, result[led_idx].g + ring_color.g),
+                            min(255, result[led_idx].b + ring_color.b)
+                        )
+        
+        return result
+
+class RainbowBranchesEffect(Effect):
+    """Rainbow colors cascade from branch to branch"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'hue_spread': 1.0  # How much hue changes between branches
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, branch_idx in enumerate(self.mask):
+            if branch_idx < len(self.tree_structure.branches):
+                # Calculate hue based on branch position and time
+                if direction == 'ccw':
+                    branch_pos = len(self.mask) - 1 - i
+                else:
+                    branch_pos = i
+                
+                hue = (elapsed * speed + branch_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                branch_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.branches[branch_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + branch_color.r),
+                            min(255, result[led_idx].g + branch_color.g),
+                            min(255, result[led_idx].b + branch_color.b)
+                        )
+        
+        return result
+
+class RainbowVortexEffect(Effect):
+    """Each ring travels at different speeds creating vortex"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'base_speed': 1.0,
+            'speed_ratio': 1.5,  # How much faster inner rings are
+            'direction': 'outward',  # 'outward' or 'inward'
+            'hue_spread': 1.0
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        base_speed = self.parameters['base_speed']
+        speed_ratio = self.parameters['speed_ratio']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                # Calculate individual speed for each ring
+                if direction == 'inward':
+                    ring_pos = len(self.mask) - 1 - i
+                else:
+                    ring_pos = i
+                
+                ring_speed = base_speed * (speed_ratio ** ring_pos)
+                hue = (elapsed * ring_speed + ring_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                ring_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.rings[ring_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + ring_color.r),
+                            min(255, result[led_idx].g + ring_color.g),
+                            min(255, result[led_idx].b + ring_color.b)
+                        )
+        
+        return result
+
+class RainbowBranchesSkewedEffect(Effect):
+    """Rainbow colors cascade through skewed branch groupings"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.skewed_branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'hue_spread': 1.0  # How much hue changes between skewed groups
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, skewed_idx in enumerate(self.mask):
+            if skewed_idx < len(self.tree_structure.skewed_branches):
+                # Calculate hue based on skewed group position and time
+                if direction == 'ccw':
+                    group_pos = len(self.mask) - 1 - i
+                else:
+                    group_pos = i
+                
+                hue = (elapsed * speed + group_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                group_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.skewed_branches[skewed_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + group_color.r),
+                            min(255, result[led_idx].g + group_color.g),
+                            min(255, result[led_idx].b + group_color.b)
                         )
         
         return result
