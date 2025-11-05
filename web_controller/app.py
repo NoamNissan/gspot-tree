@@ -13,8 +13,16 @@ import glob
 
 app = Flask(__name__)
 
-# Available recipes
-RECIPES = [
+# Available recipes organized by category
+RING_RECIPES = [
+    {"id": "ring_ripple", "name": "Ring Ripple", "description": "Ripple effect through tree rings"}
+]
+
+BRANCH_RECIPES = [
+    {"id": "branch_sweep", "name": "Branch Sweep", "description": "Sweep effect around tree branches"}
+]
+
+GENERAL_RECIPES = [
     {"id": "complex_demo", "name": "Complex Demo", "description": "Multi-effect demonstration"},
     {"id": "sunset_breathing", "name": "Sunset Breathing", "description": "Calm red-pink breathing"},
     {"id": "rainbow_wave", "name": "Rainbow Wave", "description": "Rainbow with wave effects"},
@@ -112,7 +120,8 @@ def run_recipe(recipe_id, pixels=60):
         "python3", 
         "../led_ctrl/led_orchestrator.py", 
         "--recipe", recipe_id,
-        "--pixels", str(pixels)
+        "--pixels", str(pixels),
+        "--tree-config", "../led_ctrl/tree_config.yaml"
     ]
     
     try:
@@ -196,7 +205,13 @@ def play_song(filename):
 def index():
     """Main control page"""
     songs = get_songs()
-    return render_template('index.html', recipes=RECIPES, songs=songs, current_recipe=current_recipe, current_song=current_song)
+    return render_template('index.html', 
+                         ring_recipes=RING_RECIPES, 
+                         branch_recipes=BRANCH_RECIPES, 
+                         general_recipes=GENERAL_RECIPES, 
+                         songs=songs, 
+                         current_recipe=current_recipe, 
+                         current_song=current_song)
 
 @app.route('/start/<recipe_id>')
 def start_recipe(recipe_id):

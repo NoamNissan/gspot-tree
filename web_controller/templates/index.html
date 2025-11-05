@@ -263,9 +263,34 @@
             </div>
         </div>
         
-        <h2>🎨 LED Effects</h2>
+        <h2>🌲 Tree Effects</h2>
+        
+        <h3>💍 Ring Effects</h3>
+        <br>
         <div class="recipe-grid">
-            {% for recipe in recipes %}
+            {% for recipe in ring_recipes %}
+            <div class="recipe-card" data-recipe="{{ recipe.id }}">
+                <div class="recipe-name">{{ recipe.name }}</div>
+                <div class="recipe-description">{{ recipe.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <h3>🌿 Branch Effects</h3>
+        <br>
+        <div class="recipe-grid">
+            {% for recipe in branch_recipes %}
+            <div class="recipe-card" data-recipe="{{ recipe.id }}">
+                <div class="recipe-name">{{ recipe.name }}</div>
+                <div class="recipe-description">{{ recipe.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <h3>🎨 General Effects</h3>
+        <br>
+        <div class="recipe-grid">
+            {% for recipe in general_recipes %}
             <div class="recipe-card" data-recipe="{{ recipe.id }}">
                 <div class="recipe-name">{{ recipe.name }}</div>
                 <div class="recipe-description">{{ recipe.description }}</div>
