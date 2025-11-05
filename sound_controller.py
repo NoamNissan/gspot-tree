@@ -153,3 +153,21 @@ class SoundController:
             pygame.mixer.music.stop()
         except Exception:
             pass
+
+    def play_sound_effect(self, filename):
+        """Play a short sound effect without blocking. Returns immediately."""
+        if not self.audio_available:
+            print(f"Audio not available - would play sound effect: {filename}")
+            return
+            
+        filepath = filename
+        if not os.path.isfile(filepath):
+            print(f"Sound effect file not found: {filepath}")
+            return
+        try:
+            # Use pygame.mixer.Sound for short sounds that don't need to block
+            sound = pygame.mixer.Sound(filepath)
+            sound.play()
+            print(f"Playing sound effect: {filename}")
+        except Exception as e:
+            print(f"Error playing sound effect: {e}")

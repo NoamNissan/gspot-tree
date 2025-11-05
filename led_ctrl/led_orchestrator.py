@@ -1190,6 +1190,18 @@ RECIPES = {
         effects=[
             EffectConfig("strobe", {"frequency": 100.0, "duty_cycle": 0.5})  # True stroboscopic range
         ]
+    ),
+    
+    "blue_flash": Recipe(
+        name="Blue Flash",
+        description="Flashing blue lights on all LEDs",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 255)],  # Blue
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("strobe", {"frequency": 2.0, "duty_cycle": 0.5})  # 2Hz flashing, 50% duty cycle
+        ]
     )
 }
 

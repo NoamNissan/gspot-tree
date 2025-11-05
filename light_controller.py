@@ -118,6 +118,15 @@ class LightController:
 
         self._submit_coroutine(_apply)
 
+    def start_pending(self):
+        """Start flashing blue lights for pending state."""
+        print("Starting pending state in LightController - flashing blue lights")
+        self._cancel_music_task()
+        def _apply():
+            return self._recipe_manager.apply_recipe(RECIPES["blue_flash"], transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
     def shutdown(self):
         """Cleanly stop rendering and background loop."""
         if not self._loop:

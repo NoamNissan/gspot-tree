@@ -1,6 +1,6 @@
 from sound_controller import SoundController
 from light_controller import LightController
-from state_manager import StateManager
+from state_manager import StateManager, SystemState
 from rfid_reader import RFIDReader, OperatingMode
 import argparse
 import sys
@@ -55,10 +55,16 @@ class RFIDHandler:
         self.code_to_song = code_to_song
         self.recent_codes = deque()  # Store recent codes with timestamps
         self.processing_lock = threading.Lock()
+        self.pending_timer = None  # Timer for pending state timeout
         
     def handle_rfid_code(self, code):
         """Handle incoming RFID codes with dual-chip detection logic."""
         with self.processing_lock:
+            # If a song is currently playing, completely ignore the chip
+            if self.state.get_state() == SystemState.PLAYING:
+                print(f"RFID code detected while playing: {code}. Ignoring - no effect.")
+                return
+            
             current_time = time.time()
             print(f"RFID code detected: {code}")
             
@@ -73,19 +79,34 @@ class RFIDHandler:
             if len(self.recent_codes) >= 2:
                 # Only handle double chip if the two most recent codes are different
                 if self.recent_codes[-1][0] != self.recent_codes[-2][0]:
+                    # Cancel pending timer if it's running
+                    if self.pending_timer is not None:
+                        self.pending_timer.cancel()
+                        self.pending_timer = None
                     self._handle_double_chip()
                 
             elif len(self.recent_codes) == 1:
-                # Single chip case - wait to see if another comes
-                print(f"Single chip detected: {code}. Waiting {DUAL_CHIP_WINDOW}s for second chip...")
+                # First chip detected - switch to pending state immediately
+                print(f"First chip detected: {code}. Switching to pending state (flashing blue lights)")
+                print(f"Waiting {DUAL_CHIP_WINDOW}s for second chip...")
+                
+                # Switch to pending state with blue flashing lights
+                self.state.go_pending()
+                
+                # Cancel any existing pending timer
+                if self.pending_timer is not None:
+                    self.pending_timer.cancel()
                 
                 # Start a timer to handle single chip case if no second chip comes
-                timer = threading.Timer(DUAL_CHIP_WINDOW, self._handle_single_chip, args=[code])
-                timer.start()
+                self.pending_timer = threading.Timer(DUAL_CHIP_WINDOW, self._handle_single_chip, args=[code])
+                self.pending_timer.start()
     
     def _handle_single_chip(self, code):
         """Handle the case where only one chip was detected within the window."""
         with self.processing_lock:
+            # Clear the pending timer reference
+            self.pending_timer = None
+            
             # Check if this code is still in recent_codes (meaning no second chip came)
             if any(c[0] == code for c in self.recent_codes):
                 # Remove this code from recent_codes
@@ -95,14 +116,16 @@ class RFIDHandler:
                 single_songs = get_songs_in_directory(SINGLE_CHIP_DIR)
                 if single_songs:
                     selected_song = random.choice(single_songs)
-                    print(f"Single chip confirmed. Playing random single-chip song: {selected_song}")
+                    print(f"Pending state ended - no second chip. Playing random single-chip song: {selected_song}")
                     self.state.start_song(selected_song, ChipType.SINGLE)
                 else:
                     print(f"No songs found in {SINGLE_CHIP_DIR}")
+                    # If no songs found, return to idle
+                    self.state.go_idle()
 
     def _handle_double_chip(self):
         """Handle the case where two chips were detected within the window."""
-        print("Handling double chip")
+        print("Handling double chip - second chip detected during pending state")
         # Assumes caller holds self.processing_lock
         # Dual chip case - pick a random song from DOUBLE_CHIP_DIR
         double_songs = get_songs_in_directory(DOUBLE_CHIP_DIR)
@@ -112,6 +135,8 @@ class RFIDHandler:
             self.state.start_song(random_song, ChipType.DOUBLE)
         else:
             print(f"No songs found in {DOUBLE_CHIP_DIR}")
+            # If no songs found, return to idle
+            self.state.go_idle()
         # Clear the recent codes after handling
         self.recent_codes.clear()
 

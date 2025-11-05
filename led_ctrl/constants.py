@@ -10,6 +10,8 @@ PERSISTENT_GUI_PORT = 9998
 
 NEOPIXEL_AUTO_WRITE = False
 
+NEOPIXEL_SLEEP_RATE = 1/60
+
 class LEDLayoutConstants:
     """Constants for LED layout configuration - 20 lines with 2-3 circles each"""
 

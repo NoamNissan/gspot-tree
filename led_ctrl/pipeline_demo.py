@@ -14,7 +14,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
 from .led_controller import Color
-from .constants import NEOPIXEL_AUTO_WRITE
+from .constants import NEOPIXEL_AUTO_WRITE, NEOPIXEL_SLEEP_RATE
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -998,7 +998,7 @@ class PipelineController:
             print("Using real LED hardware")
             self.simulation = False
             self.color_order = self.GRB
-            self.sleep_rate = 1/60 # 60 FPS
+            self.sleep_rate = NEOPIXEL_SLEEP_RATE # 60 FPS
         
         # Now import neopixel - will be real or mock depending on above
         import neopixel

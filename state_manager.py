@@ -1,11 +1,12 @@
 from enum import Enum
 from threading import RLock
 from typing import Optional
-from constants import ChipType
+from constants import ChipType, PENDING_SOUND_FILE
 
 
 class SystemState(Enum):
     IDLE = "IDLE"
+    PENDING = "PENDING"
     PLAYING = "PLAYING"
 
 
@@ -75,6 +76,29 @@ class StateManager:
             self._current_song = None
             self._state = SystemState.IDLE
             print("State updated: IDLE (song=None)")
+
+    def go_pending(self) -> None:
+        """Switch to pending state with flashing blue lights and play pending sound."""
+        print("StateManager.go_pending called -> transitioning to PENDING")
+        with self._lock:
+            self._unsafe_stop_audio()
+            try:
+                print("Switching lights to pending (blue flashing)")
+                self.light.start_pending()
+            except Exception:
+                print("Warning: Failed to switch lights to pending state")
+                pass
+            try:
+                # Play pending state sound effect
+                pending_sound_file = PENDING_SOUND_FILE
+                print(f"Playing pending state sound: {pending_sound_file}")
+                self.sound.play_sound_effect(pending_sound_file)
+            except Exception:
+                print("Warning: Failed to play pending state sound")
+                pass
+            self._current_song = None
+            self._state = SystemState.PENDING
+            print("State updated: PENDING")
 
     # Internal helpers (must be called under lock)
     def _unsafe_stop_audio(self) -> None:
