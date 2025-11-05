@@ -552,8 +552,9 @@ class Recipe:
 class RecipeManager:
     """Manages recipe transitions and effect lifecycle"""
     
-    def __init__(self, controller: PipelineController):
+    def __init__(self, controller: PipelineController, tree_structure = None):
         self.controller = controller
+        self.tree_structure = tree_structure
         self.current_recipe: Optional[Recipe] = None
         self.active_effects: Dict[str, str] = {}  # effect_type -> effect_id
         
@@ -687,6 +688,12 @@ class RecipeManager:
         elif effect_type == "white_strobe":
             effect = ColorStrobeEffect()
             effect.parameters['color'] = Color(255, 255, 255)  # Set to white
+        elif effect_type == "ring_ripple":
+            from pipeline_demo import RingRippleEffect
+            effect = RingRippleEffect(self.tree_structure)
+        elif effect_type == "branch_sweep":
+            from pipeline_demo import BranchSweepEffect
+            effect = BranchSweepEffect(self.tree_structure)
         elif effect_type == "sparkle":
             effect = SparkleEffect()
         elif effect_type == "wave":
@@ -1484,6 +1491,30 @@ RECIPES = {
         effects=[
             EffectConfig("white_strobe", {"frequency": STROBE_FREQ})  # Use global frequency
         ]
+    ),
+    
+    "ring_ripple": Recipe(
+        name="Ring Ripple",
+        description="Ripple effect through tree rings",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 5)],  # Very dark blue base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("ring_ripple", {"speed": 2.0, "color": Color(0, 255, 255)})
+        ]
+    ),
+    
+    "branch_sweep": Recipe(
+        name="Branch Sweep", 
+        description="Sweep effect around tree branches",
+        base_colors=BaseColorConfig(
+            colors=[Color(5, 0, 0)],  # Very dark red base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("branch_sweep", {"speed": 1.0, "color": Color(255, 100, 0)})
+        ]
     )
 }
 
@@ -1618,14 +1649,17 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
     finally:
         await controller.stop()
 
-async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False, strobe_color: Color = Color(255, 255, 255)):
+async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simulation: bool = False, strobe_color: Color = Color(255, 255, 255), tree_structure = None):
     """Run a single recipe continuously"""
     if recipe_name not in RECIPES:
         print(f"❌ Recipe '{recipe_name}' not found!")
         print(f"Available recipes: {', '.join(RECIPES.keys())}")
         return
     
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
+    # Load tree structure if available
+    tree_structure = tree_structure
+    
+    controller = PipelineController(num_pixels, force_simulation=force_simulation, tree_structure=tree_structure)
     await controller.start()
     
     try:
@@ -1648,7 +1682,7 @@ async def run_single_recipe(recipe_name: str, num_pixels: int = 100, force_simul
             render_task = asyncio.create_task(controller.run_loop())
             
             # Create recipe manager
-            recipe_manager = RecipeManager(controller)
+            recipe_manager = RecipeManager(controller, tree_structure)
             
             recipe = RECIPES[recipe_name]
             print(f"🍽️ Running recipe: {recipe.name}")
@@ -1808,6 +1842,7 @@ async def main():
     parser.add_argument('--start-blank', action='store_true', help='Clear all LEDs to black before starting')
     parser.add_argument('--clear-all', action='store_true', help='Clear all LEDs to black and exit')
     parser.add_argument('--crawl-blink-time', type=float, default=2.0, help='Blink duration per LED in crawl mode (default: 2.0 seconds)')
+    parser.add_argument('--tree-config', type=str, help='Path to tree configuration YAML file')
     
     args = parser.parse_args()
     
@@ -1859,6 +1894,52 @@ async def main():
         # Brief pause to ensure clear completes before next command
         await asyncio.sleep(0.2)
     
+    # Load tree configuration if provided
+    tree_structure = None
+    if args.tree_config:
+        try:
+            from tree_config import load_tree_config
+            from pipeline_demo import TreeStructure
+            
+            tree_data = load_tree_config(args.tree_config, verbose=True)
+            
+            # Count total LEDs in config
+            total_config_leds = 0
+            for ring in tree_data['rings']:
+                total_config_leds = max(total_config_leds, max(ring) + 1 if ring else 0)
+            for branch in tree_data['branches']:
+                total_config_leds = max(total_config_leds, max(branch) + 1 if branch else 0)
+            
+            # Warn if discarding LEDs
+            if total_config_leds > args.pixels:
+                discarded = total_config_leds - args.pixels
+                print(f"⚠️  WARNING: Tree config has {total_config_leds} LEDs, but --pixels is {args.pixels}")
+                print(f"   Discarding {discarded} LEDs (indices {args.pixels}-{total_config_leds-1})")
+            
+            # Filter LEDs to only include those within pixel range
+            filtered_rings = []
+            for ring in tree_data['rings']:
+                filtered_ring = [led for led in ring if led < args.pixels]
+                if filtered_ring:  # Only add non-empty rings
+                    filtered_rings.append(filtered_ring)
+            
+            filtered_branches = []
+            for branch in tree_data['branches']:
+                filtered_branch = [led for led in branch if led < args.pixels]
+                if filtered_branch:  # Only add non-empty branches
+                    filtered_branches.append(filtered_branch)
+            
+            tree_structure = TreeStructure(
+                rings=filtered_rings,
+                branches=filtered_branches
+            )
+            
+            print(f"🌲 Tree config loaded: {len(tree_structure.rings)} rings, {len(tree_structure.branches)} branches")
+            print(f"   Filtered to {args.pixels} LEDs")
+            
+        except Exception as e:
+            print(f"❌ Failed to load tree config: {e}")
+    
     # Determine simulation mode - default is real LEDs
     force_simulation = args.simulation
     
@@ -1867,7 +1948,7 @@ async def main():
         await set_led_range(args.set_led_range, args.pixels, force_simulation)
     elif args.clear_all:
         print(f"  Mode: Clear All LEDs")
-        controller = PipelineController(args.pixels, force_simulation=force_simulation)
+        controller = PipelineController(args.pixels, force_simulation=force_simulation, tree_structure=tree_structure)
         await controller.start()
         try:
             for i in range(args.pixels):
@@ -1882,7 +1963,7 @@ async def main():
         await led_crawl(args.pixels, args.crawl_blink_time, force_simulation)
     elif args.recipe:
         print(f"  Mode: Single recipe ({args.recipe})")
-        await run_single_recipe(args.recipe, args.pixels, force_simulation, strobe_color)
+        await run_single_recipe(args.recipe, args.pixels, force_simulation, strobe_color, tree_structure)
     else:
         print(f"  Mode: Full demo sequence")
         await demo_recipe_transitions(args.pixels, force_simulation)

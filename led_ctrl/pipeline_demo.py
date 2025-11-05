@@ -13,6 +13,13 @@ import numpy as np
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
+from dataclasses import dataclass
+
+@dataclass
+class TreeStructure:
+    """Tree LED structure with rings and branches"""
+    rings: List[List[int]]     # rings[ring_idx] = [led_indices...]
+    branches: List[List[int]]  # branches[branch_idx] = [led_indices...]
 
 # Global pipeline configuration
 PIPELINE_FPS = 240  # 240 FPS for very smooth effects
@@ -161,6 +168,107 @@ class ColorStrobeEffect(Effect):
         else:
             # Strobe off - black
             return [Color(0, 0, 0)] * len(colors)
+
+class RingRippleEffect(Effect):
+    """Ring ripple effect using tree structure"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'speed': 2.0,
+            'color': Color(0, 255, 255),
+            'fade_time': 0.5,
+            'direction': 'out'
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+
+        speed = self.parameters['speed']
+        fade_time = self.parameters['fade_time']
+        direction = self.parameters['direction']
+        effect_color = self.parameters['color']
+        
+        cycle_time = len(self.mask) / speed
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if direction == 'in':
+            phase = 1.0 - phase
+            
+        current_ring = phase * len(self.mask)
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                ring_distance = abs(i - current_ring)
+                
+                if ring_distance < fade_time * len(self.mask):
+                    intensity = max(0, 1.0 - ring_distance / (fade_time * len(self.mask)))
+                    
+                    for led_idx in self.tree_structure.rings[ring_idx]:
+                        if led_idx < len(result):
+                            # Additive blending
+                            result[led_idx] = Color(
+                                min(255, result[led_idx].r + int(effect_color.r * intensity)),
+                                min(255, result[led_idx].g + int(effect_color.g * intensity)),
+                                min(255, result[led_idx].b + int(effect_color.b * intensity))
+                            )
+        
+        return result
+
+class BranchSweepEffect(Effect):
+    """Branch sweep effect using tree structure"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'color': Color(255, 100, 0),
+            'width': 3,
+            'direction': 'cw'
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        width = self.parameters['width']
+        direction = self.parameters['direction']
+        effect_color = self.parameters['color']
+        
+        cycle_time = 1.0 / speed
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if direction == 'ccw':
+            phase = 1.0 - phase
+            
+        current_branch = phase * len(self.mask)
+        result = colors.copy()
+        
+        for i in range(width):
+            branch_pos = int((current_branch + i) % len(self.mask))
+            branch_idx = self.mask[branch_pos]
+            
+            if branch_idx < len(self.tree_structure.branches):
+                center_distance = abs(i - width // 2)
+                intensity = max(0.3, 1.0 - center_distance / (width / 2))
+                
+                for led_idx in self.tree_structure.branches[branch_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + int(effect_color.r * intensity)),
+                            min(255, result[led_idx].g + int(effect_color.g * intensity)),
+                            min(255, result[led_idx].b + int(effect_color.b * intensity))
+                        )
+        
+        return result
 
 class SparkleEffect(Effect):
     """Random sparkle effect"""
@@ -956,9 +1064,10 @@ class EffectPipeline:
 class PipelineController:
     """High-level controller for the effects pipeline"""
     
-    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = False):
+    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = False, tree_structure: TreeStructure = None):
         self.num_pixels = num_pixels
         self.pipeline = EffectPipeline(num_pixels)
+        self.tree_structure = tree_structure
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
@@ -1097,6 +1206,30 @@ class PipelineController:
         """Add sparkle effect"""
         effect = SparkleEffect()
         effect.update_parameters({'density': density})
+        return self.pipeline.add_effect(effect)
+    
+    def add_ring_ripple(self, mask: List[int] = None, speed: float = 2.0, color: Color = Color(0, 255, 255)) -> str:
+        """Add ring ripple effect"""
+        effect = RingRippleEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_branch_sweep(self, mask: List[int] = None, speed: float = 1.0, color: Color = Color(255, 100, 0)) -> str:
+        """Add branch sweep effect"""
+        effect = BranchSweepEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_ring_ripple(self, mask: List[int] = None, speed: float = 2.0, color: Color = Color(0, 255, 255)) -> str:
+        """Add ring ripple effect"""
+        effect = RingRippleEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_branch_sweep(self, mask: List[int] = None, speed: float = 1.0, color: Color = Color(255, 100, 0)) -> str:
+        """Add branch sweep effect"""
+        effect = BranchSweepEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
         return self.pipeline.add_effect(effect)
     
     def add_wave(self, speed: float = 2.0) -> str:
