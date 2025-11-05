@@ -1518,9 +1518,9 @@ RECIPES = {
     )
 }
 
-async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool = False):
+async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool = False, tree_structure = None):
     """Demonstrate recipe transitions"""
-    controller = PipelineController(num_pixels, force_simulation=force_simulation)
+    controller = PipelineController(num_pixels, force_simulation=force_simulation, tree_structure=tree_structure)
     await controller.start()
     
     try:
@@ -1528,14 +1528,22 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         render_task = asyncio.create_task(controller.run_loop())
         
         # Create recipe manager
-        recipe_manager = RecipeManager(controller)
+        recipe_manager = RecipeManager(controller, tree_structure)
         
         print("🍽️ Recipe Transition Demo")
         print("Press Ctrl+C to stop at any time")
         
+        # Ring ripple effect
+        await recipe_manager.apply_recipe(RECIPES["ring_ripple"])
+        await asyncio.sleep(6)
+        
+        # Branch sweep effect  
+        await recipe_manager.apply_recipe(RECIPES["branch_sweep"], transition_time=2.0)
+        await asyncio.sleep(7)
+        
         # Apply complex_demo
-        await recipe_manager.apply_recipe(RECIPES["complex_demo"])
-        await asyncio.sleep(6)  # Reduced from 10
+        await recipe_manager.apply_recipe(RECIPES["complex_demo"], transition_time=2.0)
+        await asyncio.sleep(7)  # Reduced from 10
         
         # Pure rainbow effect
         await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
@@ -1966,7 +1974,7 @@ async def main():
         await run_single_recipe(args.recipe, args.pixels, force_simulation, strobe_color, tree_structure)
     else:
         print(f"  Mode: Full demo sequence")
-        await demo_recipe_transitions(args.pixels, force_simulation)
+        await demo_recipe_transitions(args.pixels, force_simulation, tree_structure)
 
 if __name__ == "__main__":
     asyncio.run(main())
