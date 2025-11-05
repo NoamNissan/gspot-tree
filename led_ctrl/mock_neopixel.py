@@ -237,8 +237,8 @@ class PersistentGUI:
         available_length = max_radius - inner_radius - 40
         
         # Define prototypes
-        three_pair_positions = [0.15, 0.55, 0.95]  # 15%, 55%, 95%
-        two_pair_positions = [0.35, 0.75]          # 35%, 75%
+        three_pair_positions = [0.10, 0.55, 1.00]  # 10%, 55%, 100%
+        two_pair_positions = [0.325, 0.775]          # 32.5%, 77.5%
         
         for branch_idx, branch_leds in enumerate(self.tree_structure.branches):
             line_angle = branch_idx * line_angle_step
@@ -499,8 +499,8 @@ class MockNeoPixel:
         available_length = max_radius - inner_radius - 40
         
         # Define prototypes
-        three_pair_positions = [0.15, 0.55, 0.95]  # 15%, 55%, 95%
-        two_pair_positions = [0.35, 0.75]          # 35%, 75%
+        three_pair_positions = [0.10, 0.55, 1.00]  # 10%, 55%, 100%
+        two_pair_positions = [0.325, 0.775]          # 32.5%, 77.5%
         
         for branch_idx, branch_leds in enumerate(self.tree_structure.branches):
             line_angle = branch_idx * line_angle_step
