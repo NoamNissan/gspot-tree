@@ -299,6 +299,10 @@ class MusicVisualizerEffect(Effect):
         super().__init__(effect_id)
         self.audio_provider = audio_provider
         self.tree_structure = tree_structure
+        
+        # Ring amplitude effect state
+        self._ring_amplitude_intensities = [0.0, 0.0, 0.0, 0.0, 0.0]
+        
         self.parameters = {
             'mode': 'spectrum',     # spectrum, pulse, wave, strobe
             'sensitivity': 1.5,     # Audio sensitivity multiplier
@@ -509,31 +513,72 @@ class MusicVisualizerEffect(Effect):
         ) for c in colors]
     
     def _ring_amplitude_visualization(self, colors: List[Color], overall: float, elapsed: float) -> List[Color]:
-        """Ring amplitude effect - ring position shows audio loudness"""
+        """Ring amplitude effect - ring position shows audio amplitude"""
         
         # Get configurable colors
         background_color = self.parameters.get('background_color', Color(0, 0, 50))  # Dark blue
         ring_color = self.parameters.get('ring_color', Color(255, 255, 255))  # White
         
         # Apply dramatic enhancement (same as pulse)
-        #enhanced_amplitude = overall ** 2  # Less dramatic than ** 3 for more sensitivity
         enhanced_amplitude = overall
         
         # Map to 6 levels (0-5) with better sensitivity
         level = int(enhanced_amplitude * 10)  # Multiply by 10 instead of 6 for more sensitivity
         level = min(5, max(0, level))
         
-        # Start with background color for all LEDs
-        result = [background_color] * len(colors)
+        # Start with provided background colors (overlay approach)
+        result = colors.copy()
         
-        # If amplitude > 0 and we have tree structure, light up the appropriate ring
-        if level > 0 and self.tree_structure and hasattr(self.tree_structure, 'rings'):
-            ring_index = level - 1  # Level 1 -> Ring 0, Level 5 -> Ring 4
-            if ring_index < len(self.tree_structure.rings):
-                ring_leds = self.tree_structure.rings[ring_index]  # Flat list of LED indices
-                for led_idx in ring_leds:  # Each element is a single LED index
-                    if led_idx < len(result):
-                        result[led_idx] = ring_color
+        if self.parameters.get('fade_enabled', False):
+            # FADE MODE: Use intensity tracking with decay
+            decay_factor = self.parameters.get('decay_factor', 0.5)
+            
+            # Decay all rings
+            for i in range(5):
+                self._ring_amplitude_intensities[i] *= decay_factor
+            
+            # Set current ring to full intensity
+            if level > 0:
+                self._ring_amplitude_intensities[level - 1] = 1.0
+            
+            # Apply all rings with their current intensities
+            fade_threshold = self.parameters.get('fade_threshold', 0.01)
+            for ring_index in range(5):
+                intensity = self._ring_amplitude_intensities[ring_index]
+                if intensity > fade_threshold and self.tree_structure and hasattr(self.tree_structure, 'rings'):
+                    if ring_index < len(self.tree_structure.rings):
+                        # Blend ring color with background
+                        faded_color = Color(
+                            min(255, int(ring_color.r * intensity)),
+                            min(255, int(ring_color.g * intensity)),
+                            min(255, int(ring_color.b * intensity))
+                        )
+                        
+                        ring_leds = self.tree_structure.rings[ring_index]
+                        for led_idx in ring_leds:
+                            if led_idx < len(result):
+                                # Overlay on existing background
+                                bg = result[led_idx]
+                                result[led_idx] = Color(
+                                    min(255, bg.r + faded_color.r),
+                                    min(255, bg.g + faded_color.g),
+                                    min(255, bg.b + faded_color.b)
+                                )
+        else:
+            # NO FADE MODE: Original behavior - only current ring
+            if level > 0 and self.tree_structure and hasattr(self.tree_structure, 'rings'):
+                ring_index = level - 1
+                if ring_index < len(self.tree_structure.rings):
+                    ring_leds = self.tree_structure.rings[ring_index]
+                    for led_idx in ring_leds:
+                        if led_idx < len(result):
+                            # Overlay ring color on background
+                            bg = result[led_idx]
+                            result[led_idx] = Color(
+                                min(255, bg.r + ring_color.r),
+                                min(255, bg.g + ring_color.g),
+                                min(255, bg.b + ring_color.b)
+                            )
         
         return result
     

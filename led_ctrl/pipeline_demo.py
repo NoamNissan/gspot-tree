@@ -1311,7 +1311,7 @@ class PipelineController:
         import neopixel
         import board
         
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, tree_structure=tree_structure)
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
         self.running = False
         self.start_time = 0
     
