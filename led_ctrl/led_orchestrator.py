@@ -1403,12 +1403,12 @@ RECIPES = {
         name="Fire Demo",
         description="Flickering fire effect",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 100, 0), Color(255, 0, 0)],  # Orange to red
+            colors=[Color(255, 100, 0), Color(210, 0, 0)],  # Orange to red
             mode=TransitionMode.FADE,
-            speed=0.8
+            speed=0.4
         ),
         effects=[
-            EffectConfig("fire", {"speed": 0.06, "intensity": 10})
+            EffectConfig("fire", {"speed": 0.005, "intensity": 10})
         ]
     ),
     
@@ -1420,7 +1420,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("circle_scan", {"speed": 3.0, "width": 8})
+            EffectConfig("circle_scan", {"speed": 5.0, "width": 8})
         ]
     ),
 
@@ -1432,7 +1432,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("scan", {"speed": 3.0, "width": 8})
+            EffectConfig("scan", {"speed":0.55, "width": 5})
         ]
     ),
     
@@ -1440,11 +1440,11 @@ RECIPES = {
         name="Digital Rain",
         description="Matrix-style digital rain",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 20, 0)],  # Very very dark green
+            colors=[Color(0, 100, 0)],  # Very very dark green
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rain", {"speed": 2.0, "density": 0.15})
+            EffectConfig("rain", {"speed": 1.0, "density": 0.08})
         ]
     ),
     
@@ -1467,10 +1467,10 @@ RECIPES = {
         base_colors=BaseColorConfig(
             colors=[Color(0, 100, 255), Color(0, 200, 255)],  # Blue water
             mode=TransitionMode.FADE,
-            speed=0.1
+            speed=0.2
         ),
         effects=[
-            EffectConfig("water", {"speed": 0.8, "ripples": 4})
+            EffectConfig("water", {"speed": 2, "ripples": 2})
         ]
     ),
     
@@ -1490,12 +1490,12 @@ RECIPES = {
         name="Glitch Matrix",
         description="Digital glitch corruption",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 255, 0), Color(255, 0, 0)],  # Green to red
+            colors=[Color(0, 200, 0), Color(100, 0, 0)],  # Green to red
             mode=TransitionMode.FADE,
-            speed=0.3
+            speed=0.08
         ),
         effects=[
-            EffectConfig("glitch", {"intensity": 0.3, "speed": 7.0})
+            EffectConfig("glitch", {"intensity": 0.05, "speed": 2})
         ]
     ),
     
@@ -1615,11 +1615,11 @@ RECIPES = {
         name="Branch Sweep", 
         description="Sweep effect around tree branches",
         base_colors=BaseColorConfig(
-            colors=[Color(5, 0, 0)],  # Very dark red base
+            colors=[Color(0, 0, 50)],  # Very dark red base
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("branch_sweep", {"speed": 1.0, "color": Color(255, 100, 0)})
+            EffectConfig("branch_sweep", {"speed": 0.6, "color": Color(0, 0, 255)})
         ]
     ),
     
@@ -1631,7 +1631,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_rings", {"speed": 1.0, "direction": "outward", "hue_spread": 1.0})
+            EffectConfig("rainbow_rings", {"speed": 0.5, "direction": "outward", "hue_spread": 1.0})
         ]
     ),
     
@@ -1643,7 +1643,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_branches", {"speed": 1.0, "direction": "cw", "hue_spread": 1.0})
+            EffectConfig("rainbow_branches", {"speed": 0.2, "direction": "cw", "hue_spread": 1.0})
         ]
     ),
     
@@ -1700,131 +1700,190 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         print("Press Ctrl+C to stop at any time")
         
         # Ring ripple effect
-        await recipe_manager.apply_recipe(RECIPES["ring_ripple"])
-        await asyncio.sleep(6)
-        
+
+            # avoid white, rings not working due to tree structure, fix simultor to use configuration
+        #await recipe_manager.apply_recipe(RECIPES["ring_ripple"])
+        #await asyncio.sleep(6)
+
         # Branch sweep effect  
-        await recipe_manager.apply_recipe(RECIPES["branch_sweep"], transition_time=2.0)
-        await asyncio.sleep(7)
+
+            # colors=[Color(50, 0, 0)],  # Very dark red base
+            # EffectConfig("branch_sweep", {"speed": 1.0, "color": Color(255, 0, 0)})
+
+            # colors=[Color(0, 0, 50)],  # Very dark red base
+            # EffectConfig("branch_sweep", {"speed": 0.8, "color": Color(0, 0, 255)})
+
+        #await recipe_manager.apply_recipe(RECIPES["branch_sweep"], transition_time=2.0)
+        #await asyncio.sleep(7)
+        
+
         
         # Rainbow rings effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow_rings"], transition_time=2.0)
-        await asyncio.sleep(6)
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_rings"], transition_time=2.0)
+        #await asyncio.sleep(6)
         
         # Rainbow branches effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow_branches"], transition_time=2.0)
-        await asyncio.sleep(6)
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_branches"], transition_time=2.0)
+        #await asyncio.sleep(10)
         
         # Rainbow vortex effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow_vortex"], transition_time=2.0)
-        await asyncio.sleep(6)
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_vortex"], transition_time=2.0)
+        #await asyncio.sleep(6)
         
         # Rainbow vortex alternating effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow_vortex_alternating"], transition_time=2.0)
-        await asyncio.sleep(6)
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_vortex_alternating"], transition_time=2.0)
+        #await asyncio.sleep(6)
         
         # Rainbow branches skewed effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow_branches_skewed"], transition_time=2.0)
-        await asyncio.sleep(6)
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_branches_skewed"], transition_time=2.0)
+        #await asyncio.sleep(6)
         
         # Apply complex_demo
-        await recipe_manager.apply_recipe(RECIPES["complex_demo"], transition_time=2.0)
-        await asyncio.sleep(7)  # Reduced from 10
+
+            # very messy can be like a strobe when you chip in
+        #await recipe_manager.apply_recipe(RECIPES["complex_demo"], transition_time=2.0)
+        #await asyncio.sleep(7)  # Reduced from 10
         
         # Pure rainbow effect
-        await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
-        await asyncio.sleep(5)  # Reduced from 8
+        #await recipe_manager.apply_recipe(RECIPES["rainbow"], transition_time=2.0)
+        #await asyncio.sleep(5)  # Reduced from 8
+
+
         
         # Transition to sunset_breathing (breathing continues, other effects change)
-        await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
-        await asyncio.sleep(5)  # Reduced from 8
+        #await recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=3.0)
+        #await asyncio.sleep(5)  # Reduced from 8
         
         # Transition to rainbow_wave
-        await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
-        await asyncio.sleep(6)  # Reduced from 8
+
+            # this one is not nice very messy
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_wave"], transition_time=3.0)
+        #await asyncio.sleep(6)  # Reduced from 8
+
         
         # LedFx-style spectrum analyzer
-        await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
-        await asyncio.sleep(5)  # Reduced from 8
+        #await recipe_manager.apply_recipe(RECIPES["spectrum_analyzer"], transition_time=3.0)
+        #await asyncio.sleep(5)  # Reduced from 8
         
+
+
         # Energy pulse effect
-        await recipe_manager.apply_recipe(RECIPES["energy_pulse"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 6
+            # messy
+        #await recipe_manager.apply_recipe(RECIPES["energy_pulse"], transition_time=2.0)
+        #await asyncio.sleep(4)  # Reduced from 6
+
+
         
         # Wavelength flow
-        await recipe_manager.apply_recipe(RECIPES["wavelength_flow"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 6
-        
+
+            #nice! for music as transition
+        #await recipe_manager.apply_recipe(RECIPES["wavelength_flow"], transition_time=2.0)
+        #await asyncio.sleep(4)  # Reduced from 6
+    
+
         # Rainbow scroll
-        await recipe_manager.apply_recipe(RECIPES["rainbow_scroll"], transition_time=2.0)
-        await asyncio.sleep(4)  # Reduced from 6
-        
+        #await recipe_manager.apply_recipe(RECIPES["rainbow_scroll"], transition_time=2.0)
+        #await asyncio.sleep(4)  # Reduced from 6
+
+
         # Frequency bars
-        await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
-        await asyncio.sleep(5)  # Reduced from 8
+            # too fast need a bit slower
+        #await recipe_manager.apply_recipe(RECIPES["frequency_bars"], transition_time=2.0)
+        #await asyncio.sleep(5)  # Reduced from 8
+
+
         
         # New effects showcase
         print("🔥 Showcasing new effects...")
 
         # Circle scanner effect
-        await recipe_manager.apply_recipe(RECIPES["circle_scanner"], transition_time=0.0)
-        await asyncio.sleep(5)
+
+            # epiliptic acts as stobe (good for short periods)
+            # consider to make it not white 
+        #await recipe_manager.apply_recipe(RECIPES["circle_scanner"], transition_time=0.0)
+        #await asyncio.sleep(5)
 
         # Fire effect
-        await recipe_manager.apply_recipe(RECIPES["fire_demo"], transition_time=2.0)
-        await asyncio.sleep(4)
+        #await recipe_manager.apply_recipe(RECIPES["fire_demo"], transition_time=2.0)
+        #await asyncio.sleep(4)
         
+
         # Scanner effect
-        await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
-        await asyncio.sleep(4)
+            # also try
+            # EffectConfig("scan", {"speed":0.5, "width": 3})
+
+        #await recipe_manager.apply_recipe(RECIPES["scanner"], transition_time=1.0)
+        #await asyncio.sleep(4)
+
 
         # Water ripples
-        await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=4.0)
-        await asyncio.sleep(5)
-        
+        #await recipe_manager.apply_recipe(RECIPES["water_ripples"], transition_time=4.0)
+        #await asyncio.sleep(5)
+
+
         # Glitch matrix
-        await recipe_manager.apply_recipe(RECIPES["glitch_matrix"], transition_time=1.0)
-        await asyncio.sleep(3)
+        # need to make glitch duration much much shorter as opposed to the breathing
+        #await recipe_manager.apply_recipe(RECIPES["glitch_matrix"], transition_time=1.0)
+        #await asyncio.sleep(3)
+
+
+
         
         # Digital rain
-        await recipe_manager.apply_recipe(RECIPES["digital_rain"], transition_time=2.0)
-        await asyncio.sleep(5)
+            # cool check if can make dropets more blue
+        #await recipe_manager.apply_recipe(RECIPES["digital_rain"], transition_time=2.0)
+        #await asyncio.sleep(5)
+        
+
+        # Music spectrum analyzer
+            # cool but need more to bit lit and less to flicker (increase normaliztion time)
+        #await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
+        #await asyncio.sleep(8)
         
         # Music spectrum analyzer
-        await recipe_manager.apply_recipe(RECIPES["music_spectrum"], transition_time=3.0)
-        await asyncio.sleep(8)
-        
-        # Music spectrum analyzer
-        await recipe_manager.apply_recipe(RECIPES["music_spectrum_c"], transition_time=3.0)
-        await asyncio.sleep(8)
+            #messy
+        #await recipe_manager.apply_recipe(RECIPES["music_spectrum_c"], transition_time=3.0)
+        #await asyncio.sleep(8)
+
+
 
         # Enhanced spectrum analyzer
-        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_c"], transition_time=3.0)
-        await asyncio.sleep(8)
+            #messy
+        #await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_c"], transition_time=3.0)
+        #await asyncio.sleep(8)
         
         # Enhanced spectrum analyzer with 9 bands
-        await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_9"], transition_time=3.0)
-        await asyncio.sleep(8)
+            # ok but 3 is best
+        #await recipe_manager.apply_recipe(RECIPES["spectrum_enhanced_9"], transition_time=3.0)
+        #await asyncio.sleep(8)
         
         # Music pulse effect
+            # flickery but cool
         await recipe_manager.apply_recipe(RECIPES["music_pulse"], transition_time=3.0)
         await asyncio.sleep(8)
         
+
         # Stroboscopic demo: Blue/Magenta breathing vs Direct white strobe
         print("🔥 Starting stroboscopic demo...")
         
         # Stroboscopic cycle: 5s breathing + 5s strobe (15Hz, 25Hz, 35Hz), repeat 3 times
-        strobe_frequencies = [15.0, 25.0, 35.0]
+        strobe_frequencies = [10.0, 15.0, 20.0]
+
+        # do not use white for strobing or big tree chunks only for a few leds
         strobe_colors = [
-            Color(255, 255, 255),  # White
+            Color(0, 255, 0),  # White
             Color(255, 0, 0),      # Red  
             Color(0, 0, 255)       # Blue
         ]
         
+            # green strobe is nice
+
+            # magic happens around 10Hz need to change duty cycle that will be more dark time and less light time instead of same same
+
         for cycle in range(3):
             print(f"   Cycle {cycle + 1}/3: Breathing phase...")
             await recipe_manager.apply_recipe(RECIPES["blue_magenta_breathing"], transition_time=0.0)
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(2.0)
             
             print(f"   Cycle {cycle + 1}/3: Direct {strobe_colors[cycle]} strobe phase...")
             freq = strobe_frequencies[cycle]

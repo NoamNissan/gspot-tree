@@ -10,6 +10,8 @@ import json
 from typing import Tuple, List
 from constants import PERSISTENT_GUI_PORT
 
+
+
 # Global persistent GUI instance
 _persistent_gui = None
 _persistent_mode = False
@@ -288,7 +290,7 @@ class PersistentGUI:
 class MockNeoPixel:
     """Mock NeoPixel class that can connect to persistent GUI or create its own"""
     
-    def __init__(self, pin, num_pixels: int, brightness: float = 1.0, auto_write: bool = True, tree_structure=None):
+    def __init__(self, pin, num_pixels: int, brightness: float = 1.0, auto_write: bool = True, tree_structure=None, pixel_order=None):
         self.num_pixels = num_pixels
         self.brightness = brightness
         self.auto_write = auto_write
@@ -582,3 +584,6 @@ board_module.D18 = MockBoard.D18
 board_module.D12 = MockBoard.D12
 board_module.D21 = MockBoard.D21
 sys.modules['board'] = board_module
+
+neopixel_module.RGB="RGB"
+

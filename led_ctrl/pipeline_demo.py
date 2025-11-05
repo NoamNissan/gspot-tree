@@ -1146,8 +1146,8 @@ class RainEffect(Effect):
         for i, base_color in enumerate(colors):
             drop_intensity = self.droplets[i]
             result.append(Color(
-                min(255, int(base_color.r + drop_intensity * 100)),
-                min(255, int(base_color.g + drop_intensity * 100)),
+                min(255, int(base_color.r + drop_intensity * 50)),
+                min(255, int(base_color.g + drop_intensity * 50)),
                 min(255, int(base_color.b + drop_intensity * 255))
             ))
         return result
@@ -1311,7 +1311,8 @@ class PipelineController:
         import neopixel
         import board
         
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
+        #self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, pixel_order=neopixel.RGB)
         self.running = False
         self.start_time = 0
     
