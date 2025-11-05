@@ -694,6 +694,18 @@ class RecipeManager:
         elif effect_type == "branch_sweep":
             from pipeline_demo import BranchSweepEffect
             effect = BranchSweepEffect(self.tree_structure)
+        elif effect_type == "rainbow_rings":
+            from pipeline_demo import RainbowRingsEffect
+            effect = RainbowRingsEffect(self.tree_structure)
+        elif effect_type == "rainbow_branches":
+            from pipeline_demo import RainbowBranchesEffect
+            effect = RainbowBranchesEffect(self.tree_structure)
+        elif effect_type == "rainbow_vortex":
+            from pipeline_demo import RainbowVortexEffect
+            effect = RainbowVortexEffect(self.tree_structure)
+        elif effect_type == "rainbow_branches_skewed":
+            from pipeline_demo import RainbowBranchesSkewedEffect
+            effect = RainbowBranchesSkewedEffect(self.tree_structure)
         elif effect_type == "sparkle":
             effect = SparkleEffect()
         elif effect_type == "wave":
@@ -1515,6 +1527,66 @@ RECIPES = {
         effects=[
             EffectConfig("branch_sweep", {"speed": 1.0, "color": Color(255, 100, 0)})
         ]
+    ),
+    
+    "rainbow_rings": Recipe(
+        name="Rainbow Rings",
+        description="Rainbow colors emanate through rings",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_rings", {"speed": 1.0, "direction": "outward", "hue_spread": 1.0})
+        ]
+    ),
+    
+    "rainbow_branches": Recipe(
+        name="Rainbow Branches",
+        description="Rainbow colors cascade from branch to branch",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_branches", {"speed": 1.0, "direction": "cw", "hue_spread": 1.0})
+        ]
+    ),
+    
+    "rainbow_vortex": Recipe(
+        name="Rainbow Vortex",
+        description="Each ring contains full rainbow spinning at different speeds",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_vortex", {"base_speed": 1.0, "speed_ratio": 0.9, "direction": "cw", "alternating": False})
+        ]
+    ),
+    
+    "rainbow_vortex_alternating": Recipe(
+        name="Rainbow Vortex Alternating",
+        description="Each ring spins in alternating directions at different speeds",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_vortex", {"base_speed": 1.0, "speed_ratio": 0.9, "direction": "cw", "alternating": True})
+        ]
+    ),
+    
+    "rainbow_branches_skewed": Recipe(
+        name="Rainbow Branches Skewed",
+        description="Rainbow colors through skewed branch groupings",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_branches_skewed", {"speed": 1.0, "direction": "cw", "hue_spread": 1.0})
+        ]
     )
 }
 
@@ -1540,6 +1612,26 @@ async def demo_recipe_transitions(num_pixels: int = 100, force_simulation: bool 
         # Branch sweep effect  
         await recipe_manager.apply_recipe(RECIPES["branch_sweep"], transition_time=2.0)
         await asyncio.sleep(7)
+        
+        # Rainbow rings effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow_rings"], transition_time=2.0)
+        await asyncio.sleep(6)
+        
+        # Rainbow branches effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow_branches"], transition_time=2.0)
+        await asyncio.sleep(6)
+        
+        # Rainbow vortex effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow_vortex"], transition_time=2.0)
+        await asyncio.sleep(6)
+        
+        # Rainbow vortex alternating effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow_vortex_alternating"], transition_time=2.0)
+        await asyncio.sleep(6)
+        
+        # Rainbow branches skewed effect
+        await recipe_manager.apply_recipe(RECIPES["rainbow_branches_skewed"], transition_time=2.0)
+        await asyncio.sleep(6)
         
         # Apply complex_demo
         await recipe_manager.apply_recipe(RECIPES["complex_demo"], transition_time=2.0)

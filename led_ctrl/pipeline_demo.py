@@ -393,7 +393,7 @@ class RainbowBranchesEffect(Effect):
         return result
 
 class RainbowVortexEffect(Effect):
-    """Each ring travels at different speeds creating vortex"""
+    """Each ring contains full rainbow and spins at different speeds"""
     
     def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
         super().__init__(effect_id)
@@ -402,8 +402,8 @@ class RainbowVortexEffect(Effect):
         self.parameters = {
             'base_speed': 1.0,
             'speed_ratio': 1.5,  # How much faster inner rings are
-            'direction': 'outward',  # 'outward' or 'inward'
-            'hue_spread': 1.0
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'alternating': False  # If true, rings alternate direction
         }
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
@@ -413,33 +413,41 @@ class RainbowVortexEffect(Effect):
         base_speed = self.parameters['base_speed']
         speed_ratio = self.parameters['speed_ratio']
         direction = self.parameters['direction']
-        hue_spread = self.parameters['hue_spread']
+        alternating = self.parameters['alternating']
         
         result = colors.copy()
         
         for i, ring_idx in enumerate(self.mask):
             if ring_idx < len(self.tree_structure.rings):
+                ring_leds = self.tree_structure.rings[ring_idx]
+                if not ring_leds:
+                    continue
+                
                 # Calculate individual speed for each ring
-                if direction == 'inward':
-                    ring_pos = len(self.mask) - 1 - i
-                else:
-                    ring_pos = i
+                ring_speed = base_speed * (speed_ratio ** i)
                 
-                ring_speed = base_speed * (speed_ratio ** ring_pos)
-                hue = (elapsed * ring_speed + ring_pos * hue_spread / len(self.mask)) % 1.0
+                # Apply direction and alternating
+                if direction == 'ccw':
+                    ring_speed = -ring_speed
+                if alternating and i % 2 == 1:  # Odd rings reverse direction
+                    ring_speed = -ring_speed
                 
-                # Convert HSV to RGB
-                import colorsys
-                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-                ring_color = Color(int(r * 255), int(g * 255), int(b * 255))
-                
-                for led_idx in self.tree_structure.rings[ring_idx]:
+                # Each LED in ring gets different hue based on position + time
+                for j, led_idx in enumerate(ring_leds):
                     if led_idx < len(result):
+                        # Hue based on LED position in ring + spinning time offset
+                        hue = (j / len(ring_leds) + elapsed * ring_speed) % 1.0
+                        
+                        # Convert HSV to RGB
+                        import colorsys
+                        r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                        led_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                        
                         # Additive blending
                         result[led_idx] = Color(
-                            min(255, result[led_idx].r + ring_color.r),
-                            min(255, result[led_idx].g + ring_color.g),
-                            min(255, result[led_idx].b + ring_color.b)
+                            min(255, result[led_idx].r + led_color.r),
+                            min(255, result[led_idx].g + led_color.g),
+                            min(255, result[led_idx].b + led_color.b)
                         )
         
         return result
