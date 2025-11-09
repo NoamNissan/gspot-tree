@@ -1,6 +1,6 @@
 from enum import Enum
-from threading import RLock
-from typing import Optional
+from threading import RLock, Thread
+from typing import Optional, Callable
 from constants import ChipType, PENDING_SOUND_FILE
 
 
@@ -25,6 +25,7 @@ class StateManager:
         self.light = light_controller
         self._state = SystemState.IDLE
         self._current_song: Optional[str] = None
+        self._playback_thread: Optional[Thread] = None
         self._lock = RLock()
         print("StateManager initialized: state=IDLE")
 
@@ -32,13 +33,26 @@ class StateManager:
         with self._lock:
             return self._state
 
-    def start_song(self, song_filename: str, chip_type: ChipType = ChipType.SINGLE) -> None:
+    def start_song(self, song_filename: str, chip_type: ChipType = ChipType.SINGLE, callback: Optional[Callable[[], None]] = None) -> None:
+        """
+        Start playing a song. Returns immediately while playback happens in a background thread.
+        
+        Args:
+            song_filename: Path to the song file to play
+            chip_type: Type of chip (single or double)
+            callback: Optional callback function to call when song finishes (or is stopped)
+        """
         with self._lock:
             print(f"StateManager.start_song called: song='{song_filename}', chip_type='{chip_type}'")
             # If already playing something else, stop first
             if self._state == SystemState.PLAYING:
                 print("A song is already playing. Stopping current song before starting new one.")
                 self._unsafe_stop_audio()
+                # Wait for previous playback thread to finish if it exists
+                if self._playback_thread and self._playback_thread.is_alive():
+                    # Note: We don't join here as it might block, but we've stopped the audio
+                    pass
+            
             try:
                 print(f"Switching lights to music mode for {chip_type} chip")
                 self.light.start_music(chip_type)
@@ -46,18 +60,45 @@ class StateManager:
                 # Light failures should not prevent audio
                 print("Warning: Failed to switch lights to music mode")
                 pass
+            
+            # Set state before releasing lock
+            self._current_song = song_filename
+            self._state = SystemState.PLAYING
+            print(f"State updated: PLAYING (song='{self._current_song}')")
+        
+        # Start playback in a background thread so this method returns immediately
+        def playback_coroutine():
+            """Coroutine that runs in background thread to play the song."""
             try:
                 print(f"Starting audio playback: {song_filename}")
                 self.sound.play_song(song_filename, chip_type)
+            except Exception as e:
+                print(f"Error during playback: {e}")
             finally:
-                # If play blocks until completion, ensure we go idle afterwards
-                self._current_song = song_filename
-                self._state = SystemState.PLAYING
-                print(f"State updated: PLAYING (song='{self._current_song}')")
-
-            # When play_song returns, the song has likely ended (current implementation blocks)
-            # Transition to idle to keep lights coherent
-            self.go_idle()
+                # When play_song returns, the song has ended or was stopped
+                # Call the callback if provided and if still in PLAYING state
+                # (if end_song was called manually, state might already be IDLE)
+                if callback:
+                    should_call_callback = False
+                    with self._lock:
+                        # Only call callback if still in PLAYING state
+                        # (end_song might have already been called manually)
+                        if self._state == SystemState.PLAYING:
+                            should_call_callback = True
+                        else:
+                            print(f"Playback finished but state is already {self._state}, skipping callback")
+                    
+                    # Call callback outside of lock to avoid nested lock acquisition
+                    if should_call_callback:
+                        try:
+                            callback()
+                        except Exception as e:
+                            print(f"Error in playback callback: {e}")
+        
+        # Start the playback thread
+        self._playback_thread = Thread(target=playback_coroutine, daemon=True)
+        self._playback_thread.start()
+        print(f"Playback started in background thread for: {song_filename}")
 
     def end_song(self) -> None:
         with self._lock:

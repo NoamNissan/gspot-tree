@@ -16,6 +16,7 @@ from constants import DUAL_CHIP_WINDOW, ChipType, NUM_PIXELS
 
 SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
+STOP_CHIPS_FILE = "stop_chips.txt"
 
 SINGLE_CHIP_DIR = os.path.join(SONGS_DIR, "single_chip")
 DOUBLE_CHIP_DIR = os.path.join(SONGS_DIR, "double_chip")
@@ -47,26 +48,85 @@ def get_songs_in_directory(directory_path):
     return songs
 
 
+def load_stop_chips(txt_path):
+    """Load chip IDs from a text file that should stop music playback.
+    
+    Returns:
+        set: Set of chip IDs that trigger music stop
+    """
+    stop_chips = set()
+    try:
+        if not os.path.exists(txt_path):
+            print(f"Stop chips file not found: {txt_path}. No stop chips configured.")
+            return stop_chips
+        
+        with open(txt_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines and comments
+                if line and not line.startswith("#"):
+                    stop_chips.add(line)
+        if stop_chips:
+            print(f"Loaded {len(stop_chips)} stop chip(s) from {txt_path}: {stop_chips}")
+        else:
+            print(f"No stop chips loaded from {txt_path}")
+    except Exception as e:
+        print(f"Error reading stop chips file '{txt_path}': {e}")
+    return stop_chips
+
+
 class RFIDHandler:
-    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager):
+    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set):
         self.sound = sound_controller
         self.light = light_controller
         self.state = state_manager
         self.code_to_song = code_to_song
+        self.stop_chips = stop_chips
         self.recent_codes = deque()  # Store recent codes with timestamps
         self.processing_lock = threading.Lock()
         self.pending_timer = None  # Timer for pending state timeout
         
     def handle_rfid_code(self, code):
         """Handle incoming RFID codes with dual-chip detection logic."""
+        print(f"RFID code detected: {code}")
         with self.processing_lock:
-            # If a song is currently playing, completely ignore the chip
-            if self.state.get_state() == SystemState.PLAYING:
-                print(f"RFID code detected while playing: {code}. Ignoring - no effect.")
+            print(f"Processing code: {code}")
+            # Normalize the code (strip whitespace) to ensure consistent matching
+            normalized_code = code.strip() if code else code
+            
+            # Debug: print received code for troubleshooting
+            current_state = self.state.get_state()
+            if current_state == SystemState.PLAYING:
+                print(f"RFID code received during playback: '{normalized_code}' (original: '{code}')")
+            
+            # Check if this is a stop chip - if so, stop music immediately regardless of state
+            # This check happens BEFORE checking if music is playing, so stop chips always work
+            if normalized_code in self.stop_chips:
+                if current_state == SystemState.PLAYING:
+                    print(f"Stop chip detected: '{normalized_code}'. Stopping music immediately and returning to idle.")
+                    self.state.end_song()
+                elif current_state == SystemState.PENDING:
+                    print(f"Stop chip detected: '{normalized_code}'. Cancelling pending state and returning to idle.")
+                    # Cancel pending timer if it's running
+                    if self.pending_timer is not None:
+                        self.pending_timer.cancel()
+                        self.pending_timer = None
+                    self.state.go_idle()
+                    self.recent_codes.clear()
+                else:
+                    print(f"Stop chip detected: '{normalized_code}'. Already in idle state.")
+                return
+            
+            # If a song is currently playing, completely ignore the chip (unless it's a stop chip, handled above)
+            if current_state == SystemState.PLAYING:
+                print(f"RFID code detected while playing: '{normalized_code}'. Ignoring - no effect.")
                 return
             
             current_time = time.time()
-            print(f"RFID code detected: {code}")
+            print(f"RFID code detected: {normalized_code}")
+            
+            # Use normalized code for all subsequent processing
+            code = normalized_code
             
             # Add current code to recent codes
             self.recent_codes.append((code, current_time))
@@ -117,7 +177,7 @@ class RFIDHandler:
                 if single_songs:
                     selected_song = random.choice(single_songs)
                     print(f"Pending state ended - no second chip. Playing random single-chip song: {selected_song}")
-                    self.state.start_song(selected_song, ChipType.SINGLE)
+                    self.state.start_song(selected_song, ChipType.SINGLE, callback=self.state.end_song)
                 else:
                     print(f"No songs found in {SINGLE_CHIP_DIR}")
                     # If no songs found, return to idle
@@ -132,7 +192,7 @@ class RFIDHandler:
         if double_songs:
             random_song = random.choice(double_songs)
             print(f"Dual chip detected! Playing random double-chip song: {random_song}")
-            self.state.start_song(random_song, ChipType.DOUBLE)
+            self.state.start_song(random_song, ChipType.DOUBLE, callback=self.state.end_song)
         else:
             print(f"No songs found in {DOUBLE_CHIP_DIR}")
             # If no songs found, return to idle
@@ -219,8 +279,9 @@ def main():
     state = StateManager(sound, light)
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)
+    stop_chips = load_stop_chips(STOP_CHIPS_FILE)
     # Create the RFID handler
-    handler = RFIDHandler(sound, light, code_to_song, state)
+    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips)
 
     # Ensure idle state on startup after light controller is ready
     try:

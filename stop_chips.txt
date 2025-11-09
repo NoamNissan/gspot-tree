@@ -1,0 +1,7 @@
+# Stop Chips Configuration
+# Each line contains a chip ID that will immediately stop music playback
+# Empty lines and lines starting with # are ignored
+# Example:
+# ABC123
+# DEF456
+0013690700
