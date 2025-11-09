@@ -80,14 +80,14 @@ class LightController:
             else:
                 print(f"Starting cycling music recipes for {chip_type} chip")
                 single_chip_recipes = [
-                    "music_spectrum",    # Real-time audio spectrum visualization
+                    # "music_spectrum",    # Real-time audio spectrum visualization
                     # "music_pulse",       # Colors pulse with music
-                    # "spectrum_analyzer", 
-                    # "rainbow_wave",  
-                    # "rainbow",
-                    # "wavelength_flow",
-                    # "rainbow_scroll",  
-                    # "fire_demo",
+                    "spectrum_analyzer", 
+                    "rainbow_wave",  
+                    "rainbow",
+                    "wavelength_flow",
+                    "rainbow_scroll",  
+                    "fire_demo",
                 ]
                 return self._start_cycling_recipes(single_chip_recipes)
 

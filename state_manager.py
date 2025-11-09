@@ -8,6 +8,7 @@ class SystemState(Enum):
     IDLE = "IDLE"
     PENDING = "PENDING"
     PLAYING = "PLAYING"
+    PARTY = "PARTY"
 
 
 class StateManager:
@@ -140,6 +141,21 @@ class StateManager:
             self._current_song = None
             self._state = SystemState.PENDING
             print("State updated: PENDING")
+
+    def go_party(self) -> None:
+        """Switch to party state with lights but no music playback."""
+        print("StateManager.go_party called -> transitioning to PARTY")
+        with self._lock:
+            self._unsafe_stop_audio()
+            try:
+                print("Switching lights to party mode (single chip lights, no music)")
+                self.light.start_music(ChipType.SINGLE)
+            except Exception:
+                print("Warning: Failed to switch lights to party mode")
+                pass
+            self._current_song = None
+            self._state = SystemState.PARTY
+            print("State updated: PARTY")
 
     # Internal helpers (must be called under lock)
     def _unsafe_stop_audio(self) -> None:

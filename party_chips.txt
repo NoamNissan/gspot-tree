@@ -1,0 +1,7 @@
+# Party Chips Configuration
+# Each line contains a chip ID that will activate party mode (lights only, no music)
+# Empty lines and lines starting with # are ignored
+# Example:
+# ABC123
+# DEF456
+5

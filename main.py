@@ -17,6 +17,7 @@ from constants import DUAL_CHIP_WINDOW, ChipType, NUM_PIXELS
 SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
 STOP_CHIPS_FILE = "stop_chips.txt"
+PARTY_CHIPS_FILE = "party_chips.txt"
 
 SINGLE_CHIP_DIR = os.path.join(SONGS_DIR, "single_chip")
 DOUBLE_CHIP_DIR = os.path.join(SONGS_DIR, "double_chip")
@@ -48,40 +49,63 @@ def get_songs_in_directory(directory_path):
     return songs
 
 
-def load_stop_chips(txt_path):
-    """Load chip IDs from a text file that should stop music playback.
+def load_chips_from_file(txt_path, chip_type_name):
+    """Load chip IDs from a text file.
+    
+    Args:
+        txt_path: Path to the text file containing chip IDs
+        chip_type_name: Descriptive name for the chip type (e.g., "stop", "party")
     
     Returns:
-        set: Set of chip IDs that trigger music stop
+        set: Set of chip IDs loaded from the file
     """
-    stop_chips = set()
+    chips = set()
     try:
         if not os.path.exists(txt_path):
-            print(f"Stop chips file not found: {txt_path}. No stop chips configured.")
-            return stop_chips
+            print(f"{chip_type_name.capitalize()} chips file not found: {txt_path}. No {chip_type_name} chips configured.")
+            return chips
         
         with open(txt_path, "r") as f:
             for line in f:
                 line = line.strip()
                 # Skip empty lines and comments
                 if line and not line.startswith("#"):
-                    stop_chips.add(line)
-        if stop_chips:
-            print(f"Loaded {len(stop_chips)} stop chip(s) from {txt_path}: {stop_chips}")
+                    chips.add(line)
+        if chips:
+            print(f"Loaded {len(chips)} {chip_type_name} chip(s) from {txt_path}: {chips}")
         else:
-            print(f"No stop chips loaded from {txt_path}")
+            print(f"No {chip_type_name} chips loaded from {txt_path}")
     except Exception as e:
-        print(f"Error reading stop chips file '{txt_path}': {e}")
-    return stop_chips
+        print(f"Error reading {chip_type_name} chips file '{txt_path}': {e}")
+    return chips
+
+
+def load_stop_chips(txt_path):
+    """Load chip IDs from a text file that should stop music playback.
+    
+    Returns:
+        set: Set of chip IDs that trigger music stop
+    """
+    return load_chips_from_file(txt_path, "stop")
+
+
+def load_party_chips(txt_path):
+    """Load chip IDs from a text file that should activate party mode.
+    
+    Returns:
+        set: Set of chip IDs that trigger party mode
+    """
+    return load_chips_from_file(txt_path, "party")
 
 
 class RFIDHandler:
-    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set):
+    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set, party_chips: set):
         self.sound = sound_controller
         self.light = light_controller
         self.state = state_manager
         self.code_to_song = code_to_song
         self.stop_chips = stop_chips
+        self.party_chips = party_chips
         self.recent_codes = deque()  # Store recent codes with timestamps
         self.processing_lock = threading.Lock()
         self.pending_timer = None  # Timer for pending state timeout
@@ -113,11 +137,26 @@ class RFIDHandler:
                         self.pending_timer = None
                     self.state.go_idle()
                     self.recent_codes.clear()
+                elif current_state == SystemState.PARTY:
+                    print(f"Stop chip detected: '{normalized_code}'. Stopping party mode and returning to idle.")
+                    self.state.go_idle()
+                    self.recent_codes.clear()
                 else:
                     print(f"Stop chip detected: '{normalized_code}'. Already in idle state.")
                 return
             
-            # If a song is currently playing, completely ignore the chip (unless it's a stop chip, handled above)
+            # Check if this is a party chip - if so, switch to party mode immediately
+            if normalized_code in self.party_chips:
+                print(f"Party chip detected: '{normalized_code}'. Switching to party mode (lights only, no music).")
+                # Cancel pending timer if it's running
+                if self.pending_timer is not None:
+                    self.pending_timer.cancel()
+                    self.pending_timer = None
+                self.state.go_party()
+                self.recent_codes.clear()
+                return
+            
+            # If a song is currently playing, completely ignore the chip (unless it's a stop chip or party chip, handled above)
             if current_state == SystemState.PLAYING:
                 print(f"RFID code detected while playing: '{normalized_code}'. Ignoring - no effect.")
                 return
@@ -280,8 +319,9 @@ def main():
     rfid = RFIDReader(mode=mode)
     code_to_song = load_rfid_song_mapping(CSV_FILE)
     stop_chips = load_stop_chips(STOP_CHIPS_FILE)
+    party_chips = load_party_chips(PARTY_CHIPS_FILE)
     # Create the RFID handler
-    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips)
+    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips, party_chips)
 
     # Ensure idle state on startup after light controller is ready
     try:
