@@ -160,6 +160,10 @@ class RFIDHandler:
             if current_state == SystemState.PLAYING:
                 print(f"RFID code detected while playing: '{normalized_code}'. Ignoring - no effect.")
                 return
+
+            if current_state == SystemState.PARTY:
+                print(f"RFID code detected while in party mode: '{normalized_code}'. Ignoring - no effect.")
+                return
             
             current_time = time.time()
             print(f"RFID code detected: {normalized_code}")

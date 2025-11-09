@@ -148,8 +148,8 @@ class StateManager:
         with self._lock:
             self._unsafe_stop_audio()
             try:
-                print("Switching lights to party mode (single chip lights, no music)")
-                self.light.start_music(ChipType.SINGLE)
+                print("Switching lights to party mode (cycling party patterns, no music)")
+                self.light.start_party()
             except Exception:
                 print("Warning: Failed to switch lights to party mode")
                 pass

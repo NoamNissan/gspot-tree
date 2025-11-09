@@ -80,14 +80,14 @@ class LightController:
             else:
                 print(f"Starting cycling music recipes for {chip_type} chip")
                 single_chip_recipes = [
-                    # "music_spectrum",    # Real-time audio spectrum visualization
+                    "music_spectrum",    # Real-time audio spectrum visualization
                     # "music_pulse",       # Colors pulse with music
-                    "spectrum_analyzer", 
-                    "rainbow_wave",  
-                    "rainbow",
-                    "wavelength_flow",
-                    "rainbow_scroll",  
-                    "fire_demo",
+                    # "spectrum_analyzer", 
+                    # "rainbow_wave",  
+                    # "rainbow",
+                    # "wavelength_flow",
+                    # "rainbow_scroll",  
+                    # "fire_demo",
                 ]
                 return self._start_cycling_recipes(single_chip_recipes)
 
@@ -108,6 +108,26 @@ class LightController:
                 print(f"Applying {recipe_name} recipe")
                 await self._recipe_manager.apply_recipe(RECIPES[recipe_name], transition_time=1.0)
                 await asyncio.sleep(sleep_interval)  # Wait sleep_interval seconds before next recipe
+
+    def start_party(self):
+        """Start party mode with cycling non-music-reactive LED patterns."""
+        print("Starting party mode in LightController - cycling through party patterns")
+        def _apply():
+            party_recipes = [
+                    "spectrum_analyzer", 
+                    "rainbow_wave",  
+                    "rainbow",
+                    "wavelength_flow",
+                    "rainbow_scroll",  
+                    "fire_demo",
+            ]
+            return self._start_cycling_recipes(party_recipes, sleep_interval=8.0)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
 
     def stop_music(self):
         """Switch to a calm breathing-style recipe."""
