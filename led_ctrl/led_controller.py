@@ -6,7 +6,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Callable, Dict, Any
 import colorsys
-import datetime
+from colors_array import Colors
 
 # Configuration
 BREATHING_MIN_INTENSITY = 0.2  # Minimum intensity for breathing animation (0.0 = fully off, 1.0 = full brightness)
@@ -17,13 +17,10 @@ try:
     import neopixel
     SIMULATION_MODE = False
 except ImportError:
-    # raise ImportError("Neopixel not found")
     # Import mock modules
-    from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board, set_persistent_mode
+    from mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
-    print('in force simulation mode')
     SIMULATION_MODE = True
-    set_persistent_mode(True)
 
 class TransitionType(Enum):
     CUTOFF = "cutoff"
@@ -72,7 +69,7 @@ class Color:
 @dataclass
 class Animation:
     animation_type: AnimationType
-    colors: List[Color]
+    colors: Colors
     duration: float = 5.0  # seconds
     speed: float = 1.0     # animation speed multiplier
     intensity: float = 1.0  # brightness multiplier
@@ -96,7 +93,7 @@ class LEDController:
         
         self.num_pixels = num_pixels
         self.brightness = brightness
-        self.current_pixels = [Color(0, 0, 0)] * num_pixels
+        self.current_pixels = Colors(num_pixels)
         
         # Initialize NeoPixel (real or mock)
         if force_simulation or SIMULATION_MODE:
@@ -148,7 +145,6 @@ class LEDController:
                           program: Program, 
                           transition: TransitionType) -> None:
         """Run a program with animations and transitions"""
-        print(f'running program {program.animations[0].animation_type.value} {datetime.datetime.now().isoformat()}')
         
         animation_index = 0
         
@@ -174,7 +170,7 @@ class LEDController:
                                next_animation: Optional[Animation],
                                transition: TransitionType) -> None:
         """Execute a single animation"""
-
+        
         start_time = time.time()
         
         while time.time() - start_time < animation.duration and self.running:
@@ -199,11 +195,11 @@ class LEDController:
             for i, color in enumerate(animation_colors):
                 if i < len(self.pixels):
                     self.pixels[i] = color.to_tuple()
-        
+            
             self.pixels.show()
             await asyncio.sleep(1/60)  # 60 FPS
     
-    def _calculate_animation_colors(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _calculate_animation_colors(self, animation: Animation, elapsed: float) -> Colors:
         """Calculate colors for an animation at given time"""
         
         if animation.animation_type == AnimationType.SOLID:
@@ -233,12 +229,12 @@ class LEDController:
         elif animation.animation_type == AnimationType.RED_PINK_FLASH:
             return self._red_pink_flash_animation(animation, elapsed)
         
-        return [Color(0, 0, 0)] * self.num_pixels
+        return Colors(self.num_pixels)
     
-    def _solid_animation(self, animation: Animation) -> List[Color]:
+    def _solid_animation(self, animation: Animation) -> Colors:
         """Solid color animation"""
         if not animation.colors:
-            return [Color(0, 0, 0)] * self.num_pixels
+            return Colors(self.num_pixels)
         
         colors = []
         for i in range(self.num_pixels):
@@ -251,7 +247,7 @@ class LEDController:
             ))
         return colors
     
-    def _rainbow_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _rainbow_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Static rainbow across all pixels"""
         colors = []
         for i in range(self.num_pixels):
@@ -260,7 +256,7 @@ class LEDController:
             colors.append(color)
         return colors
     
-    def _rainbow_cycle_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _rainbow_cycle_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Cycling rainbow animation"""
         colors = []
         cycle_offset = (elapsed * animation.speed) % 1.0
@@ -271,12 +267,12 @@ class LEDController:
             colors.append(color)
         return colors
     
-    def _color_wipe_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _color_wipe_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Color wipe animation"""
         if not animation.colors:
-            return [Color(0, 0, 0)] * self.num_pixels
+            return Colors(self).num_pixels
         
-        colors = [Color(0, 0, 0)] * self.num_pixels
+        colors = Colors(self).num_pixels
         
         # Calculate how many pixels should be lit
         cycle_time = 2.0 / animation.speed  # 2 seconds per cycle
@@ -306,12 +302,12 @@ class LEDController:
         
         return colors
     
-    def _theater_chase_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _theater_chase_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Theater chase animation"""
         if not animation.colors:
-            return [Color(0, 0, 0)] * self.num_pixels
+            return Colors(self).num_pixels
         
-        colors = [Color(0, 0, 0)] * self.num_pixels
+        colors = Colors(self).num_pixels
         chase_speed = animation.speed * 10  # Make it faster
         offset = int(elapsed * chase_speed) % 3
         
@@ -326,10 +322,10 @@ class LEDController:
         
         return colors
     
-    def _breathing_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _breathing_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Breathing animation with sinusoidal intensity"""
         if not animation.colors:
-            return [Color(0, 0, 0)] * self.num_pixels
+            return Colors(self).num_pixels
         
         # Use squared sine wave for more time at higher intensities
         raw_sine = (math.sin(elapsed * animation.speed * 2 * math.pi) + 1) / 2
@@ -347,10 +343,10 @@ class LEDController:
             ))
         return colors
     
-    def _twinkle_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _twinkle_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Twinkle animation with random sparkles"""
         if not animation.colors:
-            return [Color(0, 0, 0)] * self.num_pixels
+            return Colors(self).num_pixels
         
         colors = []
         base_color = animation.colors[0]
@@ -373,7 +369,7 @@ class LEDController:
         
         return colors
     
-    def _fire_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _fire_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Fire animation with flickering orange/red colors"""
         colors = []
         
@@ -399,7 +395,7 @@ class LEDController:
         
         return colors
 
-    def _red_pink_flash_animation(self, animation: Animation, elapsed: float) -> List[Color]:
+    def _red_pink_flash_animation(self, animation: Animation, elapsed: float) -> Colors:
         """Red-pink breathing with single random LED flash"""
         colors = []
         
@@ -439,7 +435,7 @@ def create_rainbow_program() -> Program:
     ]
     return Program(animations, [TransitionType.CUTOFF], loop=True)
 
-def create_color_wipe_program(colors: List[Color]) -> Program:
+def create_color_wipe_program(colors: Colors) -> Program:
     """Create a color wipe program"""
     animations = []
     for color in colors:
@@ -448,7 +444,7 @@ def create_color_wipe_program(colors: List[Color]) -> Program:
     transitions = [TransitionType.CUTOFF] * len(animations)
     return Program(animations, transitions, loop=True)
 
-def create_theater_chase_program(colors: List[Color]) -> Program:
+def create_theater_chase_program(colors: Colors) -> Program:
     """Create a theater chase program"""
     animations = []
     for color in colors:
@@ -457,7 +453,7 @@ def create_theater_chase_program(colors: List[Color]) -> Program:
     transitions = [TransitionType.CUTOFF] * len(animations)
     return Program(animations, transitions, loop=True)
 
-def create_breathing_program(colors: List[Color]) -> Program:
+def create_breathing_program(colors: Colors) -> Program:
     """Create a breathing program"""
     animations = []
     for color in colors:
@@ -482,14 +478,13 @@ def create_red_pink_flash_program() -> Program:
 
 # Example usage
 async def main():
-    print("Running LED controller demo")
     import argparse
     
     parser = argparse.ArgumentParser(description='LED Controller Demo')
     parser.add_argument('--simulate', action='store_true', 
                        help='Force simulation mode even if hardware is available')
-    parser.add_argument('--pixels', type=int, default=30,
-                       help='Number of LED pixels (default: 30)')
+    parser.add_argument('--pixels', type=int, default=100,
+                       help='Number of LED pixels (default: 100)')
     parser.add_argument('--pin', type=int, default=18,
                        help='GPIO pin number (default: 18)')
     parser.add_argument('--brightness', type=float, default=0.8,

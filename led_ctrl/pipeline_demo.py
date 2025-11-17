@@ -47,13 +47,15 @@ class TreeStructure:
 
 # Global pipeline configuration
 PIPELINE_FPS = 240  # 240 FPS for very smooth effects
-from .led_controller import Color
+from led_controller import Color
+from colors_array import Colors
 
 class TransitionMode(Enum):
     STATIC = "static"
     CYCLE = "cycle"
     FADE = "fade"
     RANDOM = "random"
+    PAIR_BLEND = "pair_blend"
 
 class BlendMode(Enum):
     REPLACE = "replace"
@@ -64,25 +66,28 @@ class BlendMode(Enum):
 @dataclass
 class BaseColorLayer:
     """Base color layer that provides the foundation colors"""
-    colors: List[Color]
+    colors: Colors
     transition_mode: TransitionMode = TransitionMode.STATIC
     transition_speed: float = 1.0
     current_position: float = 0.0
     
-    def get_colors(self, num_pixels: int, elapsed: float) -> List[Color]:
+    def get_colors(self, num_pixels: int, elapsed: float) -> Colors:
         """Get base colors for all pixels"""
         if not self.colors:
-            return [Color(0, 0, 0)] * num_pixels
+            return Colors(num_pixels)
         
         if self.transition_mode == TransitionMode.STATIC:
-            # Single color or repeat pattern
-            return [self.colors[i % len(self.colors)] for i in range(num_pixels)]
+            # Pick one random color
+            color = random.choice(self.colors)
+            color_list = [color] * num_pixels
+            return Colors(color_list)
         
         elif self.transition_mode == TransitionMode.CYCLE:
             # Cycle through colors over time
             self.current_position = (elapsed * self.transition_speed) % len(self.colors)
             color_index = int(self.current_position)
-            return [self.colors[color_index]] * num_pixels
+            color_list = [self.colors[color_index]] * num_pixels
+            return Colors(color_list)
         
         elif self.transition_mode == TransitionMode.FADE:
             # Smooth fade between colors
@@ -92,13 +97,32 @@ class BaseColorLayer:
             blend_factor = self.current_position - int(self.current_position)
             
             blended_color = self.colors[color1_idx].blend(self.colors[color2_idx], blend_factor)
-            return [blended_color] * num_pixels
+            color_list = [blended_color] * num_pixels
+            return Colors(color_list)
+        
+        elif self.transition_mode == TransitionMode.PAIR_BLEND:
+            # Alternating LEDs blend: even LEDs go color1→color2, odd LEDs go color2→color1
+            if len(self.colors) < 2:
+                color_list = [self.colors[0]] * num_pixels
+                return Colors(color_list)
+            
+            self.current_position = (elapsed * self.transition_speed) % 2
+            blend_factor = self.current_position if self.current_position < 1 else 2 - self.current_position
+            
+            color_list = []
+            for i in range(num_pixels):
+                if i % 2 == 0:
+                    color_list.append(self.colors[0].blend(self.colors[1], blend_factor))
+                else:
+                    color_list.append(self.colors[1].blend(self.colors[0], blend_factor))
+            return Colors(color_list)
         
         else:  # RANDOM
             # Random color selection
             random.seed(int(elapsed * self.transition_speed))
             color = random.choice(self.colors)
-            return [color] * num_pixels
+            color_list = [color] * num_pixels
+            return Colors(color_list)
 
 class Effect:
     """Base class for all effects"""
@@ -111,13 +135,13 @@ class Effect:
         self.internal_state = {}
         self.start_time = time.time()
     
-    def apply(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def apply(self, colors: Colors, elapsed: float) -> Colors:
         """Apply effect to color array"""
         if not self.enabled:
             return colors
         return self._apply_effect(colors, elapsed)
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         """Override this in subclasses"""
         return colors
     
@@ -136,7 +160,7 @@ class BreathingEffect(Effect):
             'max_intensity': 1.0
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         # Calculate breathing intensity
         phase = math.sin(elapsed * self.parameters['speed'] * 2 * math.pi) * 0.5 + 0.5
         intensity = (self.parameters['min_intensity'] + 
@@ -151,6 +175,51 @@ class BreathingEffect(Effect):
         # Convert back to Color objects
         return [Color(int(rgb[0]), int(rgb[1]), int(rgb[2])) for rgb in color_array]
 
+class FadeToColorEffect(Effect):
+    """Fade from current colors to target color over time"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'target_color': Color(0, 0, 0),  # Target color to fade to
+            'duration': 2.0,  # Duration in seconds
+            'start_time': None  # Will be set when effect starts
+        }
+        self.initial_colors = None
+    
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        # Initialize start time and capture initial colors
+        if self.parameters['start_time'] is None:
+            self.parameters['start_time'] = elapsed
+            # Convert numpy types to regular ints to avoid overflow
+            self.initial_colors = [Color(int(colors[i].r), int(colors[i].g), int(colors[i].b)) for i in range(len(colors))]
+        
+        # Calculate fade progress (0.0 to 1.0)
+        fade_elapsed = elapsed - self.parameters['start_time']
+        progress = min(fade_elapsed / self.parameters['duration'], 1.0)
+        
+        # If fade is complete, return target color and stop
+        if progress >= 1.0:
+            target = self.parameters['target_color']
+            result = Colors(len(colors))
+            for i in range(len(colors)):
+                result[i] = Color(target.r, target.g, target.b)
+            return result
+        
+        # Interpolate between initial colors and target color
+        target = self.parameters['target_color']
+        result = Colors(len(colors))
+        
+        for i in range(len(colors)):
+            initial = self.initial_colors[i]
+            # Linear interpolation - no numpy clipping needed since we converted to int
+            r = int(initial.r + (target.r - initial.r) * progress)
+            g = int(initial.g + (target.g - initial.g) * progress)
+            b = int(initial.b + (target.b - initial.b) * progress)
+            result[i] = Color(r, g, b)
+        
+        return result
+
 class StrobeEffect(Effect):
     """Strobe flashing effect"""
     
@@ -161,7 +230,7 @@ class StrobeEffect(Effect):
             'duty_cycle': 0.1  # 10% on, 90% off
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         cycle_time = 1.0 / self.parameters['frequency']
         phase = (elapsed % cycle_time) / cycle_time
         
@@ -170,7 +239,7 @@ class StrobeEffect(Effect):
             return colors
         else:
             # Strobe off - dark
-            return [Color(0, 0, 0)] * len(colors)
+            return Colors(len(colors))
 
 class ColorStrobeEffect(Effect):
     """Color strobe effect - accepts any color"""
@@ -182,7 +251,7 @@ class ColorStrobeEffect(Effect):
             'color': Color(255, 255, 255)  # Default white, can be overridden
         }
 
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         cycle_time = 1.0 / self.parameters['frequency']
         phase = (elapsed % cycle_time) / cycle_time
         
@@ -191,7 +260,7 @@ class ColorStrobeEffect(Effect):
             return [self.parameters['color']] * len(colors)
         else:
             # Strobe off - black
-            return [Color(0, 0, 0)] * len(colors)
+            return Colors(len(colors))
 
 class RingRippleEffect(Effect):
     """Ring ripple effect using tree structure"""
@@ -207,7 +276,7 @@ class RingRippleEffect(Effect):
             'direction': 'out'
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
 
@@ -257,7 +326,7 @@ class BranchSweepEffect(Effect):
             'direction': 'cw'
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
             
@@ -307,7 +376,7 @@ class RainbowRingsEffect(Effect):
             'hue_spread': 1.0  # How much hue changes between rings
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
             
@@ -356,7 +425,7 @@ class RainbowBranchesEffect(Effect):
             'hue_spread': 1.0  # How much hue changes between branches
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
             
@@ -406,7 +475,7 @@ class RainbowVortexEffect(Effect):
             'alternating': False  # If true, rings alternate direction
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
             
@@ -465,7 +534,7 @@ class RainbowBranchesSkewedEffect(Effect):
             'hue_spread': 1.0  # How much hue changes between skewed groups
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         if not self.tree_structure:
             return colors
             
@@ -501,6 +570,45 @@ class RainbowBranchesSkewedEffect(Effect):
         
         return result
 
+class RotationEffect(Effect):
+    """General rotation effect - rotates any visualization around the LED strip"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 0.0,  # Rotation speed (pixels per second, 0 = no rotation)
+            'step_size': 2,  # Number of LEDs to rotate by each step (default: 2)
+            'led_pairing': True,  # Use LED pairs instead of single LEDs (default: True)
+        }
+        self.rotation_offset = 0.0  # Current rotation position (float for smooth movement)
+    
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        speed = self.parameters.get('speed', 0.0)
+        step_size = self.parameters.get('step_size', 2)
+        led_pairing = self.parameters.get('led_pairing', True)
+        if speed == 0.0 or not colors:
+            return colors
+        
+        # Update rotation position
+        self.rotation_offset += speed * (1.0 / 240.0)  # Assuming 240 FPS
+        self.rotation_offset = self.rotation_offset % len(colors)
+        
+        # Apply rotation with step_size
+        start_index = int(self.rotation_offset / step_size) * step_size % len(colors)
+        rotated = []
+        
+        for i in range(len(colors)):
+            if led_pairing:
+                # Use pairs: LEDs 0,1 get same color, 2,3 get same color, etc.
+                pair_idx = i // 2
+                source_pair_idx = (pair_idx + start_index // 2) % (len(colors) // 2)
+                source_index = source_pair_idx * 2 + (i % 2)
+            else:
+                source_index = (i + start_index) % len(colors)
+            rotated.append(colors[source_index])
+        
+        return rotated
+
 class SparkleEffect(Effect):
     """Random sparkle effect"""
     
@@ -511,7 +619,7 @@ class SparkleEffect(Effect):
             'brightness': 1.0
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         result = colors.copy()
         
         # Add random sparkles
@@ -538,7 +646,7 @@ class WaveEffect(Effect):
             'amplitude': 0.5
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         # Convert colors to numpy array
         color_array = np.array([[c.r, c.g, c.b] for c in colors], dtype=np.float32)
         
@@ -567,7 +675,7 @@ class RandomFlashEffect(Effect):
         self.current_flash_pixel = -1
         self.flash_start_time = 0
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         result = colors.copy()
         
         # Check if it's time for a new flash (every 1 second)
@@ -597,7 +705,7 @@ class LavaLampEffect(Effect):
             'contrast': 0.6  # Difference between light and dark spots
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -647,7 +755,7 @@ class FireEffect(Effect):
         }
         self.spark_pixels = None
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -684,7 +792,7 @@ class MeltEffect(Effect):
             'reactivity': 0.5
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -715,7 +823,7 @@ class FadeEffect(Effect):
         self.fade_index = 0.0
         self.forward = True
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         # Update fade index
         self.fade_index += 0.0015 * self.parameters['speed']
         if self.fade_index > 1:
@@ -744,7 +852,7 @@ class CircleScanEffect(Effect):
             'width': 5
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -779,7 +887,7 @@ class ScanEffect(Effect):
             'width': 5
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -816,23 +924,24 @@ class MarchingEffect(Effect):
             'size': 4
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
         
-        # Create marching pattern
+        # Create smooth fading marching pattern
         offset = elapsed * self.parameters['speed'] * self.parameters['size']
         positions = np.arange(num_pixels) + offset
-        pattern = (positions // self.parameters['size']) % 2
+        phase = (positions / self.parameters['size']) % 2
         
         result = []
         for i, base_color in enumerate(colors):
-            mult = pattern[i]
+            # Smooth sine wave between 0.5 and 1.5
+            brightness = 1.0 + 0.5 * np.sin(phase[i] * np.pi)
             result.append(Color(
-                int(base_color.r * mult),
-                int(base_color.g * mult),
-                int(base_color.b * mult)
+                min(255, int(base_color.r * brightness)),
+                min(255, int(base_color.g * brightness)),
+                min(255, int(base_color.b * brightness))
             ))
         return result
 
@@ -846,7 +955,7 @@ class BlocksEffect(Effect):
             'block_size': 8
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -876,7 +985,7 @@ class CrawlerEffect(Effect):
             'tail_length': 10
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -914,7 +1023,7 @@ class WaterEffect(Effect):
             'ripples': 3
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -951,7 +1060,7 @@ class GlitchEffect(Effect):
             'speed': 5.0
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -988,7 +1097,7 @@ class MetroEffect(Effect):
             'flash_duration': 0.1
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         # Calculate beat timing
         beat_interval = 60.0 / self.parameters['bpm']
         beat_phase = (elapsed % beat_interval) / beat_interval
@@ -1018,7 +1127,7 @@ class PowerEffect(Effect):
             'direction': 1  # 1 for left-to-right, -1 for right-to-left
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -1041,6 +1150,66 @@ class PowerEffect(Effect):
             ))
         return result
 
+class BlackoutEffect(Effect):
+    """Pixels turn off and return in random order"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'shutdown_mode': 'sequential',
+            'restore_mode': 'sequential',
+            'shutdown_duration': 3.0,
+            'restore_duration': 3.0,
+            'hold_duration': 0.5,
+            'on_duration': 0.0
+        }
+        self.pixel_order = None
+    
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        if self.pixel_order is None or len(self.pixel_order) != num_pixels:
+            self.pixel_order = list(range(num_pixels))
+            random.shuffle(self.pixel_order)
+        
+        shutdown_dur = self.parameters['shutdown_duration']
+        hold_dur = self.parameters['hold_duration']
+        restore_dur = self.parameters['restore_duration']
+        on_dur = self.parameters['on_duration']
+        cycle_dur = shutdown_dur + hold_dur + restore_dur + on_dur
+        phase_time = elapsed % cycle_dur
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            pixel_pos = self.pixel_order.index(i)
+            
+            if phase_time < shutdown_dur:
+                if self.parameters['shutdown_mode'] == 'instant':
+                    active = False
+                else:
+                    shutdown_progress = phase_time / shutdown_dur
+                    active = pixel_pos >= (shutdown_progress * num_pixels)
+            elif phase_time < shutdown_dur + hold_dur:
+                active = False
+            elif phase_time < shutdown_dur + hold_dur + restore_dur:
+                restore_time = phase_time - shutdown_dur - hold_dur
+                if self.parameters['restore_mode'] == 'instant':
+                    active = True
+                else:
+                    restore_progress = restore_time / restore_dur
+                    active = pixel_pos < (restore_progress * num_pixels)
+            else:
+                active = True
+            
+            if active:
+                result.append(base_color)
+            else:
+                result.append(Color(0, 0, 0))
+        
+        return result
+
 class WalkingEffect(Effect):
     """Walking white lights that bounce back and forth with constantly changing speed"""
     
@@ -1056,7 +1225,7 @@ class WalkingEffect(Effect):
         self.next_change_time = np.random.uniform(0.5, self.parameters['direction_change_time'])
         self.position = 0.0
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -1127,7 +1296,7 @@ class RainEffect(Effect):
         }
         self.droplets = None
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         num_pixels = len(colors)
         if num_pixels == 0:
             return colors
@@ -1162,7 +1331,7 @@ class RainbowEffect(Effect):
             'density': 1.0  # How compressed the rainbow is
         }
     
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
         """Apply smooth rainbow across all pixels using simple HSV conversion"""
         result = []
         
@@ -1235,6 +1404,196 @@ class RainbowEffect(Effect):
         
         return r + m, g + m, b + m
 
+class RingColorsEffect(Effect):
+    """Each ring in different color"""
+    
+    def __init__(self, tree_structure=None):
+        super().__init__()
+        self.tree_structure = tree_structure
+        # Ring colors: Red, Green, Blue, Yellow, Magenta
+        self.ring_colors = [
+            Color(255, 0, 0),    # Ring 0: Red
+            Color(0, 255, 0),    # Ring 1: Green  
+            Color(0, 0, 255),    # Ring 2: Blue
+            Color(255, 255, 0),  # Ring 3: Yellow
+            Color(255, 0, 255)   # Ring 4: Magenta
+        ]
+    
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        """Apply ring colors"""
+        if not self.tree_structure:
+            return colors
+            
+        result = Colors(len(colors))  # Start with black
+        
+        # Color each ring
+        for ring_idx, ring_leds in enumerate(self.tree_structure.rings):
+            if ring_idx < len(self.ring_colors):
+                ring_color = self.ring_colors[ring_idx]
+                for led_idx in ring_leds:
+                    if led_idx < len(result):
+                        result[led_idx] = ring_color
+        
+        return result
+
+
+class SpectrumEffect(Effect):
+    """LedFx-style spectrum analyzer effect"""
+    
+    def __init__(self, num_leds: int = 100, color: Color = Color(0, 0, 255), **kwargs):
+        super().__init__()
+        self.num_leds = num_leds
+        self.color = color
+        self.num_bands = 8
+        self.band_width = num_leds // self.num_bands
+        
+    def _apply_effect(self, colors, elapsed: float):
+        import colorsys
+        import numpy as np
+        
+        result = Colors(len(colors))
+        
+        # Simulate frequency bands
+        for band in range(self.num_bands):
+            # Simulate intensity based on time and band
+            intensity = 0.3 + 0.7 * abs(np.sin(elapsed * 2 + band * 0.8))
+            height = int(intensity * self.band_width)
+            
+            # Color based on frequency
+            hue = band / self.num_bands * 0.8
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, intensity)
+            color = Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            
+            start_led = band * self.band_width
+            for i in range(height):
+                if start_led + i < len(colors):
+                    result[start_led + i] = color
+                    
+        return result
+
+class EnergyEffect(Effect):
+    """LedFx-style energy effect"""
+    
+    def __init__(self, num_leds: int = 100, **kwargs):
+        super().__init__()
+        self.num_leds = num_leds
+        
+    def _apply_effect(self, colors, elapsed: float):
+        import numpy as np
+        
+        # Simulate energy levels
+        energy = 0.5 + 0.5 * abs(np.sin(elapsed * 2))
+        
+        # Energy-based color
+        if energy > 0.8:
+            base_color = (255, 255, 0)  # Yellow
+        elif energy > 0.5:
+            base_color = (255, 100, 0)  # Orange
+        else:
+            base_color = (255, 0, 0)    # Red
+            
+        result = []
+        for i in range(len(colors)):
+            variation = 0.8 + 0.2 * np.sin(elapsed * 5 + i * 0.1)
+            brightness = energy * variation
+            
+            result.append(Color(
+                int(base_color[0] * brightness),
+                int(base_color[1] * brightness), 
+                int(base_color[2] * brightness)
+            ))
+            
+        return result
+
+class WavelengthEffect(Effect):
+    """LedFx-style wavelength effect"""
+    
+    def __init__(self, num_leds: int = 100, **kwargs):
+        super().__init__()
+        self.num_leds = num_leds
+        
+    def _apply_effect(self, colors, elapsed: float):
+        import colorsys
+        import numpy as np
+        
+        result = []
+        for i in range(len(colors)):
+            # Traveling wave
+            wave = np.sin(2 * np.pi * (i / 20.0 - elapsed * 2))
+            
+            if wave > 0:
+                hue = 0.1 - wave * 0.1  # Red to orange
+                brightness = wave
+            else:
+                hue = 0.6 + abs(wave) * 0.1  # Blue to cyan
+                brightness = abs(wave)
+                
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, brightness)
+            result.append(Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
+            
+        return result
+
+class ScrollEffect(Effect):
+    """LedFx-style scroll effect"""
+    
+    def __init__(self, num_leds: int = 100, **kwargs):
+        super().__init__()
+        self.num_leds = num_leds
+        self.pattern_length = 20
+        self.pattern = []
+        
+        # Create rainbow pattern
+        import colorsys
+        for i in range(self.pattern_length):
+            hue = i / self.pattern_length
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            self.pattern.append((int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
+            
+    def _apply_effect(self, colors, elapsed: float):
+        # Scroll speed
+        speed = 5.0
+        offset = int(elapsed * speed) % self.pattern_length
+        
+        result = []
+        for i in range(len(colors)):
+            pattern_idx = (i + offset) % self.pattern_length
+            color = self.pattern[pattern_idx]
+            result.append(Color(color[0], color[1], color[2]))
+            
+        return result
+
+class BarsEffect(Effect):
+    """LedFx-style bars effect"""
+    
+    def __init__(self, num_leds: int = 100, **kwargs):
+        super().__init__()
+        self.num_leds = num_leds
+        self.num_bars = 10
+        self.bar_width = num_leds // self.num_bars
+        
+    def _apply_effect(self, colors, elapsed: float):
+        import colorsys
+        import numpy as np
+        
+        result = Colors(len(colors))
+        
+        for bar in range(self.num_bars):
+            # Simulate frequency data
+            freq_data = 0.2 + 0.8 * abs(np.sin(elapsed * 4 + bar * 0.6))
+            bar_height = int(freq_data * self.bar_width)
+            hue = bar / self.num_bars * 0.8
+            
+            start_led = bar * self.bar_width
+            for i in range(self.bar_width):
+                led_idx = start_led + i
+                if led_idx < len(colors) and i < bar_height:
+                    brightness = 1.0 - (i / self.bar_width) * 0.5
+                    rgb = colorsys.hsv_to_rgb(hue, 1.0, brightness)
+                    result[led_idx] = Color(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+                    
+        return result
+
+
 class EffectPipeline:
     """Main effects pipeline that combines base colors with effects"""
     
@@ -1242,9 +1601,9 @@ class EffectPipeline:
         self.num_pixels = num_pixels
         self.base_layer = BaseColorLayer([Color(255, 255, 255)])  # Default white
         self.effects: List[Effect] = []
-        self.output_buffer: List[Color] = [Color(0, 0, 0)] * num_pixels
+        self.output_buffer: Colors = Colors(num_pixels)
     
-    def render_frame(self, elapsed: float) -> List[Color]:
+    def render_frame(self, elapsed: float) -> Colors:
         """Render a single frame through the pipeline"""
         # 1. Get base colors
         colors = self.base_layer.get_colors(self.num_pixels, elapsed)
@@ -1258,11 +1617,26 @@ class EffectPipeline:
         self.output_buffer = colors
         return colors
     
-    def set_base_colors(self, colors: List[Color], mode: TransitionMode = TransitionMode.STATIC, speed: float = 1.0):
+    def set_base_colors(self, colors: Colors, mode: TransitionMode = TransitionMode.STATIC, speed: float = 1.0):
         """Update base color layer"""
-        self.base_layer.colors = colors
-        self.base_layer.transition_mode = mode
-        self.base_layer.transition_speed = speed
+        # Ensure all parameters are resolved (not Range objects)
+        from recipe_manager import ChoiceRange, FloatRange
+        
+        resolved_colors = colors
+        while isinstance(resolved_colors, ChoiceRange):
+            resolved_colors = resolved_colors.resolve()
+            
+        resolved_mode = mode
+        while isinstance(resolved_mode, ChoiceRange):
+            resolved_mode = resolved_mode.resolve()
+            
+        resolved_speed = speed
+        while isinstance(resolved_speed, (FloatRange, ChoiceRange)):
+            resolved_speed = resolved_speed.resolve()
+        
+        self.base_layer.colors = resolved_colors
+        self.base_layer.transition_mode = resolved_mode
+        self.base_layer.transition_speed = resolved_speed
     
     def add_effect(self, effect: Effect) -> str:
         """Add an effect to the pipeline"""
@@ -1302,17 +1676,17 @@ class PipelineController:
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
-            from . import mock_neopixel  # This will monkey patch neopixel module
+            import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
+            import neopixel  # Import after monkey patching
+            self.pixels = neopixel.NeoPixel(None, num_pixels, brightness=1.0, auto_write=False, tree_structure=tree_structure)
         else:
+            # Now import neopixel - will be real or mock depending on above
             print("Using real LED hardware")
+            import neopixel
+            import board
+            self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, pixel_order=neopixel.RGB)
         
-        # Now import neopixel - will be real or mock depending on above
-        import neopixel
-        import board
-        
-        #self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, pixel_order=neopixel.RGB)
         self.running = False
         self.start_time = 0
     
@@ -1331,22 +1705,40 @@ class PipelineController:
     async def run_loop(self):
         """Main rendering loop"""
         while self.running:
-            elapsed = time.time() - self.start_time
-            
-            # Render frame through pipeline
-            colors = self.pipeline.render_frame(elapsed)
-            
-            # Update physical/mock LEDs
-            for i, color in enumerate(colors):
-                self.pixels[i] = (color.r, color.g, color.b)
-            self.pixels.show()
-            
-            # Use global FPS setting
-            await asyncio.sleep(1/PIPELINE_FPS)
+            try:
+                elapsed = time.time() - self.start_time
+
+                # Render frame through pipeline
+                colors = self.pipeline.render_frame(elapsed)
+
+                # Update physical/mock LEDs
+                for i, color in enumerate(colors):
+                    self.pixels[i] = (color.r, color.g, color.b)
+                self.pixels.show()
+
+                # Use global FPS setting
+                await asyncio.sleep(1/PIPELINE_FPS)
+            except KeyboardInterrupt as e:
+                print(f"🛑 User interrupted render loop: {e}")
+                self.running = False
+                return
+            except EOFError as e:
+                print(f"🛑 EOF in render loop: {e}")
+                self.running = False
+                return
+            except Exception as e:
+                # Raise unexpected exceptions
+                print(f"❌ ASYNCIO THREAD EXCEPTION: {e}")
+                print(f"❌ Exception type: {type(e)}")
+                import traceback
+                traceback.print_exc()
+                print("❌ STOPPING PROGRAM DUE TO EXCEPTION")
+                self.running = False
+                raise  # Re-raise to crash the program
     
-    def trigger_strobe_sync(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
+    def trigger_strobe_sync(self, frequency: float, duration: float, color: Color = Color(255, 255, 255), duty_cycle: float = 0.2):
         """Synchronous direct strobe - use fill method with frequency compensation"""
-        print(f"🔥 Starting {frequency}Hz {color} strobe for {duration}s...")
+        print(f"🔥 Starting {frequency}Hz {color} strobe for {duration}s (duty: {duty_cycle*100:.0f}%)...")
         
         # Non-linear compensation - more aggressive at higher frequencies
         # At 1Hz: ~0%, At 35Hz: ~25%
@@ -1362,7 +1754,9 @@ class PipelineController:
         print(f"🔧 Compensation: {compensation_factor*100:.1f}% -> {adjusted_frequency:.1f} Hz internal")
         
         start_time = time.time()
-        half_period = 1.0 / (2 * adjusted_frequency)  # Use adjusted frequency
+        period = 1.0 / adjusted_frequency
+        on_time = period * duty_cycle
+        off_time = period * (1 - duty_cycle)
         cycle_count = 0
         
         # Try fill method first (should be fastest)
@@ -1371,15 +1765,15 @@ class PipelineController:
             black_tuple = (0, 0, 0)
             
             while time.time() - start_time < duration:
-                # Color
+                # Color ON
                 self.pixels.fill(color_tuple)
                 self.pixels.show()
-                time.sleep(half_period)
+                time.sleep(on_time)
                 
-                # Black
+                # Color OFF (black)
                 self.pixels.fill(black_tuple)
                 self.pixels.show()
-                time.sleep(half_period)
+                time.sleep(off_time)
                 
                 cycle_count += 1
                 
@@ -1392,11 +1786,11 @@ class PipelineController:
             while time.time() - start_time < duration:
                 self.pixels[:] = color_array
                 self.pixels.show()
-                time.sleep(half_period)
+                time.sleep(on_time)
                 
                 self.pixels[:] = black_array
                 self.pixels.show()
-                time.sleep(half_period)
+                time.sleep(off_time)
                 
                 cycle_count += 1
         
@@ -1404,9 +1798,9 @@ class PipelineController:
         actual_freq = cycle_count / elapsed
         print(f"🔥 Strobe complete: {cycle_count} cycles in {elapsed:.2f}s = {actual_freq:.1f} Hz")
 
-    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
+    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255), duty_cycle: float = 0.25):
         """Async wrapper for sync strobe"""
-        self.trigger_strobe_sync(frequency, duration, color)
+        self.trigger_strobe_sync(frequency, duration, color, duty_cycle)
 
     # Convenience methods
     def set_solid_color(self, color: Color):
@@ -1426,6 +1820,12 @@ class PipelineController:
         """Add breathing effect"""
         effect = BreathingEffect()
         effect.update_parameters({'speed': speed, 'min_intensity': min_intensity, 'max_intensity': max_intensity})
+        return self.pipeline.add_effect(effect)
+    
+    def add_fade_to_color(self, target_color: Color, duration: float = 2.0) -> str:
+        """Add fade to color effect"""
+        effect = FadeToColorEffect()
+        effect.update_parameters({'target_color': target_color, 'duration': duration})
         return self.pipeline.add_effect(effect)
     
     def add_strobe(self, frequency: float = 5.0) -> str:

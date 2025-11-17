@@ -34,72 +34,97 @@ class TreeConfig:
         return leds
 
 def process_bypassed_leds(config_data: Dict[str, Any], verbose: bool = False) -> Dict[str, Any]:
-    """Validate YAML consistency, collect bypassed LEDs and convert negatives to positives"""
+    """Process bypassed LEDs (negative numbers) and shift indices"""
     
-    bypassed_leds = set()
-    
-    # First pass: collect all bypassed LEDs
-    def collect_bypassed(structure):
-        for group in structure:
-            for pair in group:
-                for led in pair:
-                    if isinstance(led, int) and led < 0:
-                        bypassed_leds.add(abs(led))
-    
-    collect_bypassed(config_data['branches'])
-    collect_bypassed(config_data['rings'])
-    
-    # Second pass: validate consistency - bypassed LEDs must be negative everywhere
-    def validate_consistency(structure, structure_name):
-        for group_idx, group in enumerate(structure):
+    def check_led_consistency(bypassed_led_num, found_in):
+        """Check if bypassed LED appears as positive elsewhere"""
+        # Check in branches
+        for group_idx, group in enumerate(config_data['branches']):
             for pair_idx, pair in enumerate(group):
                 for led_idx, led in enumerate(pair):
-                    if isinstance(led, int):
-                        led_num = abs(led)
-                        if led_num in bypassed_leds and led > 0:
-                            raise ValueError(
-                                f"LED {led_num} is bypassed elsewhere but appears as positive "
-                                f"in {structure_name}[{group_idx}][{pair_idx}][{led_idx}]. Must be -{led_num}."
-                            )
+                    if led == bypassed_led_num:  # Found as positive
+                        raise ValueError(
+                            f"LED {bypassed_led_num} is bypassed in {found_in} but appears as positive "
+                            f"in branches[{group_idx}][{pair_idx}][{led_idx}]. Must be -{bypassed_led_num}."
+                        )
+        
+        # Check in rings  
+        for group_idx, group in enumerate(config_data['rings']):
+            for pair_idx, pair in enumerate(group):
+                for led_idx, led in enumerate(pair):
+                    if led == bypassed_led_num:  # Found as positive
+                        raise ValueError(
+                            f"LED {bypassed_led_num} is bypassed in {found_in} but appears as positive "
+                            f"in rings[{group_idx}][{pair_idx}][{led_idx}]. Must be -{bypassed_led_num}."
+                        )
+    
+    def process_structure(structure, structure_name):
+        """Process branches or rings structure"""
+        bypass_count = 0
+        processed = []
+        
+        for group_idx, group in enumerate(structure):
+            processed_group = []
+            for pair_idx, pair in enumerate(group):
+                processed_pair = []
+                for led_idx, led in enumerate(pair):
+                    if isinstance(led, int) and led < 0:
+                        # Negative number = bypassed LED - check consistency
+                        bypassed_led_num = abs(led)
+                        check_led_consistency(bypassed_led_num, f"{structure_name}[{group_idx}][{pair_idx}][{led_idx}]")
+                        
+                        if verbose:
+                            print(f"🔧 Bypass detected: LED {bypassed_led_num} in {structure_name}[{group_idx}][{pair_idx}][{led_idx}]")
+                        bypass_count += 1
+                        # Don't add bypassed LEDs to the pair
+                    else:
+                        # Shift LED index back by bypass count
+                        shifted_led = led - bypass_count
+                        if verbose and bypass_count > 0:
+                            print(f"   Shifting LED {led} → {shifted_led} (bypass count: {bypass_count})")
+                        processed_pair.append(shifted_led)
+                
+                # Only add pairs that have LEDs
+                if processed_pair:
+                    processed_group.append(processed_pair)
+            
+            if processed_group:
+                processed.append(processed_group)
+        
+        return processed
     
     if verbose:
         print("🔧 Processing bypassed LEDs...")
-        print(f"🔧 Found bypassed LEDs: {sorted(bypassed_leds)}")
     
-    validate_consistency(config_data['branches'], 'branches')
-    validate_consistency(config_data['rings'], 'rings')
-    
-    # Third pass: convert negatives to positives
-    def convert_negatives(structure, structure_name):
-        for group_idx, group in enumerate(structure):
-            for pair_idx, pair in enumerate(group):
-                for led_idx, led in enumerate(pair):
-                    if isinstance(led, int) and led < 0:
-                        bypassed_led_num = abs(led)
-                        if verbose:
-                            print(f"🔧 Converting -{bypassed_led_num} → {bypassed_led_num} in {structure_name}[{group_idx}][{pair_idx}][{led_idx}]")
-                        pair[led_idx] = bypassed_led_num
-    
-    convert_negatives(config_data['branches'], 'branches')
-    convert_negatives(config_data['rings'], 'rings')
+    processed_data = {
+        'branches': process_structure(config_data['branches'], 'branches'),
+        'rings': process_structure(config_data['rings'], 'rings')
+    }
     
     if verbose:
-        print("✅ All negatives converted to positives, bypassed list created")
+        print("\n✅ Processed configuration:")
+        print("Branches:")
+        for i, branch in enumerate(processed_data['branches']):
+            print(f"  Branch {i}: {branch}")
+        print("Rings:")
+        for i, ring in enumerate(processed_data['rings']):
+            print(f"  Ring {i}: {ring}")
+        print()
     
-    return config_data, bypassed_leds
+    return processed_data
 
-def load_tree_config(config_path: str, verbose: bool = False) -> tuple:
-    """Load tree configuration and return config + bypassed LEDs list"""
+def load_tree_config(config_path: str, verbose: bool = False) -> Dict[str, List[List[int]]]:
+    """Load tree configuration and return processed structure"""
     with open(config_path, 'r') as f:
         if config_path.endswith('.yaml') or config_path.endswith('.yml'):
             data = yaml.safe_load(f)
         else:
             data = json.load(f)
     
-    # Process bypassed LEDs - convert negatives to positives and collect bypassed list
-    processed_data, bypassed_leds = process_bypassed_leds(data, verbose)
+    # Process bypassed LEDs and flatten to LED indices
+    processed_data = process_bypassed_leds(data, verbose)
     
-    # Convert to flat LED index lists (no removal, just flattening)
+    # Convert to flat LED index lists
     rings = []
     for ring_pairs in processed_data['rings']:
         ring_leds = []
@@ -114,13 +139,10 @@ def load_tree_config(config_path: str, verbose: bool = False) -> tuple:
             branch_leds.extend(pair)
         branches.append(branch_leds)
     
-    config = {
+    return {
         'rings': rings,
-        'branches': branches,
-        'bypassed_leds': bypassed_leds
+        'branches': branches
     }
-    
-    return config
 
 def create_example_config(output_path: str = 'tree_config.yaml'):
     """Create example tree configuration file"""

@@ -7,8 +7,10 @@ import random
 import socket
 import threading
 import json
+import sys
 from typing import Tuple, List
-from .constants import PERSISTENT_GUI_PORT
+from constants import PERSISTENT_GUI_PORT
+from ascii_tree_pairs import generate_ascii_tree_with_pairs, load_tree_config
 
 
 
@@ -24,10 +26,29 @@ def set_persistent_mode(enabled: bool):
 class PersistentGUI:
     """Persistent GUI that can be shared across multiple app runs"""
     
-    def __init__(self, num_pixels: int, verbose: bool = True, tree_structure=None):
+    def __init__(self, num_pixels: int, verbose: bool = True, tree_structure=None, ascii: bool = False):
         self.num_pixels = num_pixels
         self.verbose = verbose
         self.tree_structure = tree_structure
+        self.ascii_mode = ascii
+        
+        # Load tree config for ASCII mode
+        if ascii:
+            if tree_structure:
+                # Convert flattened branches back to pair format for ASCII
+                paired_branches = []
+                for branch_leds in tree_structure.branches:
+                    pairs = []
+                    for i in range(0, len(branch_leds), 2):
+                        if i + 1 < len(branch_leds):
+                            pairs.append([branch_leds[i], branch_leds[i + 1]])
+                    paired_branches.append(pairs)
+                self.tree_config_cache = {'branches': paired_branches}
+                print(f"🌲 ASCII mode initialized with converted tree_structure")
+            else:
+                self.tree_config_cache = load_tree_config('tree_config.yaml')
+                print(f"🌲 ASCII mode initialized with tree config from YAML")
+        
         self.root = tk.Tk()
         self.root.title(f"LED Simulator - {num_pixels} pixels (Persistent Mode)")
         self.canvas = tk.Canvas(self.root, width=1000, height=800, bg='black')
@@ -142,6 +163,8 @@ class PersistentGUI:
         print("🔌 Client connected")
         try:
             buffer = ""
+            current_pixels = [(0, 0, 0)] * self.num_pixels if self.ascii_mode else None
+            
             while True:
                 data = client.recv(1024)
                 if not data:
@@ -160,20 +183,45 @@ class PersistentGUI:
                             if command['type'] == 'update_pixel':
                                 if self.verbose:
                                     print(f"   LED {command['index']} -> {command['color']}")
+                                if self.ascii_mode and current_pixels and command['index'] < len(current_pixels):
+                                    current_pixels[command['index']] = tuple(command['color'])
                                 self.root.after(0, lambda idx=command['index'], col=command['color']: self._update_pixel(idx, col))
+                            elif command['type'] == 'bulk_update':
+                                if self.verbose:
+                                    print(f"   Bulk update: {len(command['pixels'])} LEDs")
+                                if self.ascii_mode and current_pixels:
+                                    for i, pixel in enumerate(command['pixels']):
+                                        if i < len(current_pixels):
+                                            current_pixels[i] = tuple(pixel)
+                                self.root.after(0, lambda pixels=command['pixels']: self._update_all_pixels(pixels))
                             elif command['type'] == 'update_all_pixels':
                                 if self.verbose:
                                     print(f"   Bulk update: {len(command['pixels'])} LEDs")
+                                if self.ascii_mode and current_pixels:
+                                    for i, pixel in enumerate(command['pixels']):
+                                        if i < len(current_pixels):
+                                            current_pixels[i] = tuple(pixel)
                                 self.root.after(0, lambda pixels=command['pixels']: self._update_all_pixels(pixels))
                             elif command['type'] == 'show':
                                 if self.verbose:
-                                    print(f"   Show command")
+                                    print(f"   Show command (ASCII mode: {self.ascii_mode})")
+                                # Always update GUI
                                 self.root.after(0, lambda: self.canvas.update_idletasks())
+                                # Also print ASCII if enabled
+                                if self.ascii_mode:
+                                    ascii_art = generate_ascii_tree_with_pairs(current_pixels, self.tree_config_cache)
+                                    print('\033[2J\033[H')  # Clear screen and move cursor to top
+                                    print(ascii_art)
+                                    print(f"\nWhite LEDs: {sum(1 for r, g, b in current_pixels if (r, g, b) == (255, 255, 255))}")
+                                    print("Branch labels: 00-19 (two digits for each branch)")
+                                    print("LED pairs shown as adjacent characters (e.g., 'ww' = white pair, 'br' = blue-red pair)")
                         except json.JSONDecodeError as e:
                             print(f"❌ JSON error: {e} - Line: {line}")
                 
         except Exception as e:
             print(f"Client handler error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             print("🔌 Client disconnected")
             client.close()
@@ -260,7 +308,7 @@ class PersistentGUI:
             for pair_idx in range(min(num_pairs, len(positions))):
                 # Calculate position along branch with small random error
                 base_distance = inner_radius + 20 + positions[pair_idx] * available_length
-                distance_error = random.uniform(-10, 10)  # Small random error
+                distance_error = random.uniform(-5, 5)  # Small random error
                 r = base_distance + distance_error
                 
                 pair_center_x = center_x + r * math.cos(line_angle)
@@ -298,7 +346,6 @@ class MockNeoPixel:
         self._pixels = [(0, 0, 0)] * num_pixels
         self._closed = False
         self._dirty = False  # Track if pixels have changed
-        self._gui_created = False
         
         global _persistent_gui, _persistent_mode
         
@@ -306,16 +353,8 @@ class MockNeoPixel:
             # Try to connect to persistent GUI
             self._connect_to_persistent_gui()
         else:
-            # Don't create GUI immediately - will be created when needed
-            self._setup_gui_creation()
-    
-    def _setup_gui_creation(self):
-        """Setup for GUI creation - will be created when mainloop is started"""
-        print("Setting up for GUI creation")
-        self.client_socket = None
-        self.root = None
-        self.canvas = None
-        self.circles = []
+            # Create own GUI (original behavior)
+            self._create_own_gui()
     
     def _connect_to_persistent_gui(self):
         """Connect to persistent GUI via socket"""
@@ -326,25 +365,7 @@ class MockNeoPixel:
             print("🖥️ Connected to persistent GUI")
         except:
             print("🖥️ No persistent GUI found, creating new one...")
-            self._setup_gui_creation()
-    
-    def create_gui(self):
-        """Create the GUI - must be called from main thread"""
-        if self._gui_created:
-            return
-        
-        print("Creating GUI from main thread")
-        self._create_own_gui()
-        self._gui_created = True
-    
-    def start_mainloop(self):
-        """Start the GUI mainloop - must be called from main thread"""
-        if not self._gui_created:
-            self.create_gui()
-        
-        if hasattr(self, 'root') and not self._closed:
-            print("Starting GUI mainloop")
-            self.root.mainloop()
+            self._create_own_gui()
     
     def _create_own_gui(self):
         """Create own GUI window (original behavior)"""
@@ -424,8 +445,32 @@ class MockNeoPixel:
         self.canvas.create_text(10, 10, text=f"LEDs 0-{self.num_pixels-1} ({self.num_pixels} pixels)", 
                                fill='white', anchor='nw')
     
-    def __setitem__(self, index: int, color: Tuple[int, int, int]):
-        """Set pixel color"""
+    def __setitem__(self, key, value):
+        """Set pixel color(s) - supports single pixels, slices, and bytearrays"""
+        if isinstance(key, slice):
+            # Bulk assignment - handle different input types
+            if isinstance(value, bytearray):
+                # Convert bytearray([R,G,B,R,G,B,...]) to tuples
+                num_pixels = len(value) // 3
+                for i in range(min(num_pixels, self.num_pixels)):
+                    r = value[i * 3 + 0]
+                    g = value[i * 3 + 1] 
+                    b = value[i * 3 + 2]
+                    self._set_single_pixel(i, (r, g, b))
+            elif isinstance(value, (list, tuple)):
+                # Handle list/tuple of RGB tuples
+                for i, color in enumerate(value):
+                    if i >= self.num_pixels:
+                        break
+                    self._set_single_pixel(i, color)
+            else:
+                raise TypeError(f"Unsupported bulk assignment type: {type(value)}")
+        else:
+            # Single pixel assignment
+            self._set_single_pixel(key, value)
+    
+    def _set_single_pixel(self, index: int, color: Tuple[int, int, int]):
+        """Set a single pixel color"""
         if 0 <= index < self.num_pixels:
             r, g, b = color
             r = int(r * self.brightness)
@@ -476,8 +521,34 @@ class MockNeoPixel:
         
         self._dirty = False
         
+        # ASCII mode - print tree to console via persistent GUI
+        global _persistent_gui
+        if _persistent_gui and hasattr(_persistent_gui, 'ascii_mode') and _persistent_gui.ascii_mode:
+            try:
+                tree_config = _persistent_gui.tree_config_cache if hasattr(_persistent_gui, 'tree_config_cache') else load_tree_config('tree_config.yaml')
+                ascii_art = generate_ascii_tree_with_pairs(self._pixels, tree_config)
+                # Clear screen and print tree
+                print('\033[2J\033[H')  # Clear screen and move cursor to top
+                print(ascii_art)
+                print(f"\nWhite LEDs: {sum(1 for r, g, b in self._pixels if (r, g, b) == (255, 255, 255))}")
+                print("Branch labels: 00-19 (two digits for each branch)")
+                print("LED pairs shown as adjacent characters (e.g., 'ww' = white pair, 'br' = blue-red pair)")
+                return
+            except Exception as e:
+                print(f"ASCII mode error: {e}")
+        
         if self.client_socket:
             try:
+                # Send bulk update (more efficient)
+                pixels_array = [[r, g, b] for r, g, b in self._pixels]
+                command = {
+                    'type': 'bulk_update',
+                    'pixels': pixels_array
+                }
+                message = json.dumps(command) + '\n'
+                self.client_socket.send(message.encode())
+                
+                # Then send show command
                 command = {'type': 'show'}
                 message = json.dumps(command) + '\n'
                 self.client_socket.send(message.encode())
@@ -495,6 +566,7 @@ class MockNeoPixel:
     
     def _generate_random_layout(self, center_x, center_y, max_radius, inner_radius):
         """Generate random LED layout (original behavior)"""
+        print("⚠️ WARNING - SIMULATION IN RANDOM LAYOUT")
         num_lines = 20
         line_angle_step = 2 * math.pi / num_lines
         pair_positions = []
@@ -522,14 +594,15 @@ class MockNeoPixel:
     
     def _generate_structured_layout(self, center_x, center_y, max_radius, inner_radius):
         """Generate structured LED layout based on tree configuration"""
+        print("✅ SIMULATION USING TREE LAYOUT")
         pair_positions = []
         num_branches = len(self.tree_structure.branches)
         line_angle_step = 2 * math.pi / num_branches
-        available_length = max_radius - inner_radius - 40
+        available_length = max_radius - inner_radius - 15
         
         # Define prototypes
-        three_pair_positions = [0.10, 0.55, 1.00]  # 10%, 55%, 100%
-        two_pair_positions = [0.325, 0.775]          # 32.5%, 77.5%
+        three_pair_positions = [0.10, 0.6, 1.00]  # 10%, 55%, 100%
+        two_pair_positions = [0.35, 0.8]          # 32.5%, 77.5%
         
         for branch_idx, branch_leds in enumerate(self.tree_structure.branches):
             line_angle = branch_idx * line_angle_step
@@ -543,12 +616,12 @@ class MockNeoPixel:
             elif num_pairs == 2:
                 positions = two_pair_positions
             else:
-                # Fallback for other counts
-                positions = [0.3, 0.7] if num_pairs == 2 else [0.15, 0.55, 0.95]
+                print("Invalid tree configuration")
+                assert(0)
             
             for pair_idx in range(min(num_pairs, len(positions))):
                 # Calculate position along branch with small random error
-                base_distance = inner_radius + 20 + positions[pair_idx] * available_length
+                base_distance = inner_radius + 5 + positions[pair_idx] * available_length
                 distance_error = random.uniform(-10, 10)  # Small random error
                 r = base_distance + distance_error
                 
@@ -583,11 +656,11 @@ class MockNeoPixel:
     def __len__(self):
         return self.num_pixels
 
-def start_persistent_gui(num_pixels: int = 100, verbose: bool = True, tree_structure=None):
+def start_persistent_gui(num_pixels: int = 100, verbose: bool = True, tree_structure=None, ascii: bool = False):
     """Start persistent GUI in separate process"""
     global _persistent_gui
     if _persistent_gui is None:
-        _persistent_gui = PersistentGUI(num_pixels, verbose=verbose, tree_structure=tree_structure)
+        _persistent_gui = PersistentGUI(num_pixels, verbose=verbose, tree_structure=tree_structure, ascii=ascii)
         _persistent_gui.run()
 
 # Mock board module
