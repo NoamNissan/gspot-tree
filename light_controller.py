@@ -27,21 +27,6 @@ class LightController:
         self._music_task: Optional[Future] = None
 
         print(f'Initiating light controller with {num_pixels} pixels')
-        # If running in simulation with GUI, start persistent GUI in a separate process
-        # if self.simulation and self.persistent_gui:
-        #     try:
-        #         from led_ctrl import mock_neopixel as _mn
-        #         self._gui_process = multiprocessing.Process(
-        #             target=_mn.start_persistent_gui,
-        #             args=(self.num_pixels, False),
-        #             daemon=True,
-        #             name="LED-Persistent-GUI",
-        #         )
-        #         self._gui_process.start()
-        #     except Exception:
-        #         # Fall back silently; background runtime may still run headless
-        #         self._gui_process = None
-
         # Start background runtime in a separate thread
         self._start_background_runtime()
 
@@ -65,61 +50,17 @@ class LightController:
         print(f"Timeout waiting for ready state. Loop: {bool(self._loop)}, Composer: {bool(self._led_composer)}, Running: {self._loop.is_running() if self._loop else False}")
         return bool(self._loop and self._led_composer and self._loop.is_running())
 
-    def start_music(self, chip_type: ChipType = ChipType.SINGLE):
+    def start_single_active(self, chip_type: ChipType = ChipType.SINGLE):
         """Start a music-reactive recipe (e.g., pulse to music)."""
         print(f"Starting music in LightController for {chip_type} chip")
         def _apply():
-            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE)
+            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE, transition_time=0.5)
         
         self._cancel_music_task()
         future = self._submit_coroutine(_apply)
         if future:
             self._music_task = future
             future.add_done_callback(self._on_music_task_done)
-
-        # def _apply():
-        #     if chip_type == ChipType.DOUBLE:
-        #         print(f"Applying music pulse recipe for {chip_type} chip")
-        #         double_chip_recipes = [
-                    
-        #             "pink_rainbow_wave",
-        #             "pink_spectrum_analyzer",
-        #             "pink_fire",
-        #         ]
-        #         return self._start_cycling_recipes(double_chip_recipes, 5)
-        #     else:
-        #         print(f"Starting cycling music recipes for {chip_type} chip")
-        #         single_chip_recipes = [
-        #             "music_spectrum",    # Real-time audio spectrum visualization
-        #             # "music_pulse",       # Colors pulse with music
-        #             # "spectrum_analyzer", 
-        #             # "rainbow_wave",  
-        #             # "rainbow",
-        #             # "wavelength_flow",
-        #             # "rainbow_scroll",  
-        #             # "fire_demo",
-        #         ]
-        #         return self._start_cycling_recipes(single_chip_recipes)
-
-        # self._cancel_music_task()
-        # future = self._submit_coroutine(_apply)
-        # if future:
-        #     self._music_task = future
-        #     future.add_done_callback(self._on_music_task_done)
-
-    # async def _start_cycling_recipes(self, cycling_recipes, sleep_interval=4.0):
-    #     """Start cycling through three different music recipes with 4-second intervals."""
-        
-        
-    #     print("Starting continuous cycling of music recipes")
-        
-    #     while True:
-    #         for recipe_name in cycling_recipes:
-    #             print(f"Applying {recipe_name} recipe")
-
-  
-    #             await self._recipe_manager.apply_recipe(, transition_time=1.0)
-    #             await asyncio.sleep(sleep_interval)  # Wait sleep_interval seconds before next recipe
 
     def start_party(self):
         """Start party mode with cycling non-music-reactive LED patterns."""
@@ -142,12 +83,57 @@ class LightController:
 
         self._submit_coroutine(_apply)
 
-    def start_pending(self):
-        """Start flashing blue lights for pending state."""
-        print("Starting pending state in LightController - flashing blue lights")
+    def start_single_feedback(self):
+        """Start single feedback state."""
+        print("Starting single feedback state in LightController")
         self._cancel_music_task()
         def _apply():
-            return self._led_composer.set_state(ComposerState.SINGLE_FEEDBACK)
+            return self._led_composer.set_state(ComposerState.SINGLE_FEEDBACK, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_couple_feedback(self):
+        """Start couple feedback state."""
+        print("Starting couple feedback state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.COUPLE_FEEDBACK, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_couple_active(self):
+        """Start couple active state."""
+        print("Starting couple active state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.COUPLE_ACTIVE, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_advertise(self):
+        """Start advertise state."""
+        print("Starting advertise state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.ADVERTISE, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_manual(self):
+        """Start manual state."""
+        print("Starting manual state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.MANUAL, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_idle(self):
+        """Start idle state."""
+        print("Starting idle state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.IDLE, transition_time=0.5)
 
         self._submit_coroutine(_apply)
 

@@ -2,8 +2,7 @@
 Constants for LED orchestrator
 """
 
-# from constants import NUM_PIXELS
-NUM_PIXELS = 100
+from constants import NUM_PIXELS
 
 
 # Persistent GUI configuration

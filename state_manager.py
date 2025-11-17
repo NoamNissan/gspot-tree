@@ -56,7 +56,7 @@ class StateManager:
             
             try:
                 print(f"Switching lights to music mode for {chip_type} chip")
-                self.light.start_music(chip_type)
+                self.light.start_single_active(chip_type)
             except Exception:
                 # Light failures should not prevent audio
                 print("Warning: Failed to switch lights to music mode")
@@ -126,7 +126,7 @@ class StateManager:
             self._unsafe_stop_audio()
             try:
                 print("Switching lights to pending (blue flashing)")
-                self.light.start_pending()
+                self.light.start_single_feedback()
             except Exception:
                 print("Warning: Failed to switch lights to pending state")
                 pass
@@ -170,7 +170,7 @@ class StateManager:
     def _enter_idle_lights(self) -> None:
         try:
             print("Switching lights to idle breathing")
-            self.light.stop_music()
+            self.light.start_idle()
         except Exception:
             print("Warning: Failed to switch lights to idle breathing")
             pass
