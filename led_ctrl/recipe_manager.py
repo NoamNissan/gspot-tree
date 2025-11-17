@@ -243,25 +243,25 @@ class RecipeManager:
             effect = ColorStrobeEffect()
             effect.parameters['color'] = Color(255, 255, 255)  # Set to white
         elif effect_type == "ring_ripple":
-            from pipeline_demo import RingRippleEffect
+            from .pipeline_demo import RingRippleEffect
             effect = RingRippleEffect(self.tree_structure)
         elif effect_type == "branch_sweep":
-            from pipeline_demo import BranchSweepEffect
+            from .pipeline_demo import BranchSweepEffect
             effect = BranchSweepEffect(self.tree_structure)
         elif effect_type == "rainbow_rings":
-            from pipeline_demo import RainbowRingsEffect
+            from .pipeline_demo import RainbowRingsEffect
             effect = RainbowRingsEffect(self.tree_structure)
         elif effect_type == "rainbow_branches":
-            from pipeline_demo import RainbowBranchesEffect
+            from .pipeline_demo import RainbowBranchesEffect
             effect = RainbowBranchesEffect(self.tree_structure)
         elif effect_type == "rainbow_vortex":
-            from pipeline_demo import RainbowVortexEffect
+            from .pipeline_demo import RainbowVortexEffect
             effect = RainbowVortexEffect(self.tree_structure)
         elif effect_type == "rainbow_branches_skewed":
-            from pipeline_demo import RainbowBranchesSkewedEffect
+            from .pipeline_demo import RainbowBranchesSkewedEffect
             effect = RainbowBranchesSkewedEffect(self.tree_structure)
         elif effect_type == "ring_colors":
-            from pipeline_demo import RingColorsEffect
+            from .pipeline_demo import RingColorsEffect
             effect = RingColorsEffect(self.tree_structure)
         elif effect_type == "sparkle":
             effect = SparkleEffect()
@@ -329,7 +329,7 @@ class RecipeManager:
                     self.audio_provider.start()
                 effect = MusicVisualizerEffect(self.audio_provider, self.tree_structure)
         elif effect_type == "fade_to_color":
-            from pipeline_demo import FadeToColorEffect
+            from .pipeline_demo import FadeToColorEffect
             effect = FadeToColorEffect()
         else:
             raise ValueError(f"Unknown effect type: {effect_type}")

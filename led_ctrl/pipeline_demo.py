@@ -1646,7 +1646,7 @@ class EffectPipeline:
     def set_base_colors(self, colors: Colors, mode: TransitionMode = TransitionMode.STATIC, speed: float = 1.0):
         """Update base color layer"""
         # Ensure all parameters are resolved (not Range objects)
-        from recipe_manager import ChoiceRange, FloatRange
+        from .recipe_manager import ChoiceRange, FloatRange
         
         resolved_colors = colors
         while isinstance(resolved_colors, ChoiceRange):

@@ -5,7 +5,7 @@ from concurrent.futures import Future
 from typing import Optional
 
 # Integrate with LED controller stack
-from led_ctrl.led_orchestrator import PipelineController, RecipeManager
+from led_ctrl.led_orchestrator import PipelineController
 from led_ctrl.led_composer import LEDComposer, ComposerState
 from constants import ChipType
 
@@ -47,7 +47,7 @@ class LightController:
 
     # Public API
     def wait_until_ready(self, timeout_seconds: float = 5.0) -> bool:
-        """Block until the background loop and recipe manager are ready."""
+        """Block until the background loop and LED composer are ready."""
         import time
         
         # Wait for the loop to be created and running
@@ -58,17 +58,24 @@ class LightController:
         
         deadline = time.time() + timeout_seconds
         while time.time() < deadline:
-            if self._loop and self._recipe_manager and self._loop.is_running():
+            if self._loop and self._led_composer and self._loop.is_running():
                 return True
             time.sleep(0.05)
         
-        print(f"Timeout waiting for ready state. Loop: {bool(self._loop)}, Manager: {bool(self._recipe_manager)}, Running: {self._loop.is_running() if self._loop else False}")
-        return bool(self._loop and self._recipe_manager and self._loop.is_running())
+        print(f"Timeout waiting for ready state. Loop: {bool(self._loop)}, Composer: {bool(self._led_composer)}, Running: {self._loop.is_running() if self._loop else False}")
+        return bool(self._loop and self._led_composer and self._loop.is_running())
 
     def start_music(self, chip_type: ChipType = ChipType.SINGLE):
         """Start a music-reactive recipe (e.g., pulse to music)."""
         print(f"Starting music in LightController for {chip_type} chip")
-        self._led_composer.set_state(ComposerState.SINGLE_ACTIVE)
+        def _apply():
+            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
 
         # def _apply():
         #     if chip_type == ChipType.DOUBLE:
@@ -116,19 +123,11 @@ class LightController:
 
     def start_party(self):
         """Start party mode with cycling non-music-reactive LED patterns."""
-        print("Starting party mode in LightController - cycling through party patterns")
-        def _apply():
-            party_recipes = [
-                    "spectrum_analyzer", 
-                    "rainbow_wave",  
-                    "rainbow",
-                    "wavelength_flow",
-                    "rainbow_scroll",  
-                    "fire_demo",
-            ]
-            return self._start_cycling_recipes(party_recipes, sleep_interval=8.0)
-        
+        print("Starting party mode in LightController - using ADVERTISE state for party patterns")
         self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.ADVERTISE)
+        
         future = self._submit_coroutine(_apply)
         if future:
             self._music_task = future
@@ -139,7 +138,7 @@ class LightController:
         print("Stopping music in LightController")
         self._cancel_music_task()
         def _apply():
-            return self._recipe_manager.apply_recipe(RECIPES["calm_rainbow_wave"], transition_time=1.0)
+            return self._led_composer.set_state(ComposerState.IDLE)
 
         self._submit_coroutine(_apply)
 
@@ -148,7 +147,7 @@ class LightController:
         print("Starting pending state in LightController - flashing blue lights")
         self._cancel_music_task()
         def _apply():
-            return self._recipe_manager.apply_recipe(RECIPES["blue_flash"], transition_time=0.5)
+            return self._led_composer.set_state(ComposerState.SINGLE_FEEDBACK)
 
         self._submit_coroutine(_apply)
 
@@ -159,10 +158,10 @@ class LightController:
 
         def _cleanup_coro():
             async def _inner():
-                # Stop audio provider if used
-                if self._recipe_manager and hasattr(self._recipe_manager, "audio_provider"):
+                # Stop LED composer if used
+                if self._led_composer:
                     try:
-                        self._recipe_manager.audio_provider.stop()
+                        await self._led_composer.stop()
                     except Exception:
                         pass
 
@@ -195,21 +194,12 @@ class LightController:
 
     # Internal helpers
     def _start_background_runtime(self):
-        # Create controller and start it on the main thread (not inside the background thread)
+        # Create LED composer (which creates its own controller)
         print("Starting background runtime in LightController")
-        self._controller = PipelineController(self.num_pixels, force_simulation=self.simulation)
-        try:
-            asyncio.run(self._controller.start())
-        except RuntimeError:
-            # Fallback if an event loop is already running on the main thread
-            temp_loop = asyncio.new_event_loop()
-            try:
-                temp_loop.run_until_complete(self._controller.start())
-            finally:
-                temp_loop.close()
-
-        # Create recipe manager on the main thread as well
-        self._recipe_manager = RecipeManager(self._controller)
+        import os
+        tree_config_path = os.path.join("led_ctrl", "tree_config.yaml")
+        self._led_composer = LEDComposer(tree_config_path, force_simulation=self.simulation)
+        self._controller = self._led_composer.controller
         
         # Add an event to signal when the loop is ready
         self._loop_ready = threading.Event()
@@ -220,15 +210,15 @@ class LightController:
             asyncio.set_event_loop(self._loop)
 
             async def _run():
+                # Start LED composer
+                print("Starting LED composer")
+                await self._led_composer.start()
                 # Start render loop
                 print("Starting render loop")
                 self._render_task = asyncio.create_task(self._controller.run_loop())
                 # Signal that the loop is ready
                 self._loop_ready.set()
                 print("Event loop is ready and running")
-                # Apply initial calm recipe
-                # print("Applying initial calm recipe")
-                # await self._recipe_manager.apply_recipe(RECIPES["sunset_breathing"], transition_time=0)
 
             self._loop.run_until_complete(_run())
             try:
@@ -243,8 +233,8 @@ class LightController:
         self._thread.start()
 
     def _submit_coroutine(self, coro_factory):
-        if not self._loop or not self._recipe_manager:
-            print("No loop or recipe manager")
+        if not self._loop or not self._led_composer:
+            print("No loop or LED composer")
             return
         
         if not self._loop.is_running():

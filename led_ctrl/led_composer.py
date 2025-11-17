@@ -406,8 +406,8 @@ class LEDComposer(LEDComposerInterface):
     
     def _create_fade_to_black_recipe(self, start_color):
         """Create a recipe that fades from start_color to black"""
-        from recipe_manager import Recipe, BaseColorConfig, EffectConfig, TransitionMode
-        from led_controller import Color
+        from .recipe_manager import Recipe, BaseColorConfig, EffectConfig, TransitionMode
+        from .led_controller import Color
         
         return Recipe(
             name="Fade to Black",
@@ -423,7 +423,7 @@ class LEDComposer(LEDComposerInterface):
     async def _not_active_loop(self):
         """Not active state - stays black until instructed otherwise"""
         # Create a black recipe and apply it
-        from led_controller import Color
+        from .led_controller import Color
         black_recipe = self._create_solid_color_recipe(Color(0, 0, 0))
         await self.recipe_manager.apply_recipe(black_recipe, transition_time=1.0)
         print("🖤 NOT_ACTIVE: Set to black")
@@ -434,7 +434,7 @@ class LEDComposer(LEDComposerInterface):
     
     def _create_fade_from_color_recipe(self, source_color, target_color, duration):
         """Create a recipe that sets source color then fades to target color"""
-        from recipe_manager import Recipe, BaseColorConfig, EffectConfig, TransitionMode
+        from .recipe_manager import Recipe, BaseColorConfig, EffectConfig, TransitionMode
         
         return Recipe(
             name="Fade From Color",
@@ -450,7 +450,7 @@ class LEDComposer(LEDComposerInterface):
     
     def _create_solid_color_recipe(self, color):
         """Create a recipe with solid color"""
-        from recipe_manager import Recipe, BaseColorConfig, TransitionMode
+        from .recipe_manager import Recipe, BaseColorConfig, TransitionMode
         
         return Recipe(
             name="Solid Color",
@@ -477,7 +477,7 @@ class LEDComposer(LEDComposerInterface):
     
     async def _load_recipe(self, recipe_name: str, transition_time: float = 2.0):
         """Load a recipe with smooth transition"""
-        from recipe_manager import RECIPES
+        from .recipe_manager import RECIPES
         if recipe_name not in RECIPES:
             raise ValueError(f"Recipe '{recipe_name}' not found in RECIPES")
         

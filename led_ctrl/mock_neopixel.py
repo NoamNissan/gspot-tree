@@ -535,11 +535,14 @@ class MockNeoPixel:
             except:
                 pass
         else:
-            # Update own GUI
+            # Update own GUI - check if canvas is initialized
+            if self.canvas is None or not self.circles or index >= len(self.circles):
+                return
             r, g, b = color
             hex_color = f"#{r:02x}{g:02x}{b:02x}"
             self.canvas.itemconfig(self.circles[index], fill=hex_color)
-            self.root.update_idletasks()
+            if self.root:
+                self.root.update_idletasks()
     
     def show(self):
         """Update all pixels"""
@@ -582,9 +585,13 @@ class MockNeoPixel:
             except:
                 pass
         else:
+            # Only update if GUI is initialized
+            if self.canvas is None:
+                return
             for i, color in enumerate(self._pixels):
                 self._update_pixel(i, color)
-            self.root.update()
+            if self.root:
+                self.root.update()
     
     def fill(self, color: Tuple[int, int, int]):
         """Fill all pixels with the same color"""
