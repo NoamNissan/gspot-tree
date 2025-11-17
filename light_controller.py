@@ -5,7 +5,8 @@ from concurrent.futures import Future
 from typing import Optional
 
 # Integrate with LED controller stack
-from led_ctrl.led_orchestrator import PipelineController, RecipeManager, RECIPES
+from led_ctrl.led_orchestrator import PipelineController, RecipeManager
+from led_ctrl.led_composer import LEDComposer, ComposerState
 from constants import ChipType
 
 
@@ -20,7 +21,7 @@ class LightController:
         self._thread: Optional[threading.Thread] = None
         self._gui_process: Optional[multiprocessing.Process] = None
         self._controller: Optional[PipelineController] = None
-        self._recipe_manager: Optional[RecipeManager] = None
+        self._led_composer: Optional[LEDComposer] = None
         self._render_task: Optional[asyncio.Task] = None
         self._loop_ready: Optional[threading.Event] = None
         self._music_task: Optional[Future] = None
@@ -67,47 +68,51 @@ class LightController:
     def start_music(self, chip_type: ChipType = ChipType.SINGLE):
         """Start a music-reactive recipe (e.g., pulse to music)."""
         print(f"Starting music in LightController for {chip_type} chip")
-        def _apply():
-            if chip_type == ChipType.DOUBLE:
-                print(f"Applying music pulse recipe for {chip_type} chip")
-                double_chip_recipes = [
+        self._led_composer.set_state(ComposerState.SINGLE_ACTIVE)
+
+        # def _apply():
+        #     if chip_type == ChipType.DOUBLE:
+        #         print(f"Applying music pulse recipe for {chip_type} chip")
+        #         double_chip_recipes = [
                     
-                    "pink_rainbow_wave",
-                    "pink_spectrum_analyzer",
-                    "pink_fire",
-                ]
-                return self._start_cycling_recipes(double_chip_recipes, 5)
-            else:
-                print(f"Starting cycling music recipes for {chip_type} chip")
-                single_chip_recipes = [
-                    "music_spectrum",    # Real-time audio spectrum visualization
-                    # "music_pulse",       # Colors pulse with music
-                    # "spectrum_analyzer", 
-                    # "rainbow_wave",  
-                    # "rainbow",
-                    # "wavelength_flow",
-                    # "rainbow_scroll",  
-                    # "fire_demo",
-                ]
-                return self._start_cycling_recipes(single_chip_recipes)
+        #             "pink_rainbow_wave",
+        #             "pink_spectrum_analyzer",
+        #             "pink_fire",
+        #         ]
+        #         return self._start_cycling_recipes(double_chip_recipes, 5)
+        #     else:
+        #         print(f"Starting cycling music recipes for {chip_type} chip")
+        #         single_chip_recipes = [
+        #             "music_spectrum",    # Real-time audio spectrum visualization
+        #             # "music_pulse",       # Colors pulse with music
+        #             # "spectrum_analyzer", 
+        #             # "rainbow_wave",  
+        #             # "rainbow",
+        #             # "wavelength_flow",
+        #             # "rainbow_scroll",  
+        #             # "fire_demo",
+        #         ]
+        #         return self._start_cycling_recipes(single_chip_recipes)
 
-        self._cancel_music_task()
-        future = self._submit_coroutine(_apply)
-        if future:
-            self._music_task = future
-            future.add_done_callback(self._on_music_task_done)
+        # self._cancel_music_task()
+        # future = self._submit_coroutine(_apply)
+        # if future:
+        #     self._music_task = future
+        #     future.add_done_callback(self._on_music_task_done)
 
-    async def _start_cycling_recipes(self, cycling_recipes, sleep_interval=4.0):
-        """Start cycling through three different music recipes with 4-second intervals."""
+    # async def _start_cycling_recipes(self, cycling_recipes, sleep_interval=4.0):
+    #     """Start cycling through three different music recipes with 4-second intervals."""
         
         
-        print("Starting continuous cycling of music recipes")
+    #     print("Starting continuous cycling of music recipes")
         
-        while True:
-            for recipe_name in cycling_recipes:
-                print(f"Applying {recipe_name} recipe")
-                await self._recipe_manager.apply_recipe(RECIPES[recipe_name], transition_time=1.0)
-                await asyncio.sleep(sleep_interval)  # Wait sleep_interval seconds before next recipe
+    #     while True:
+    #         for recipe_name in cycling_recipes:
+    #             print(f"Applying {recipe_name} recipe")
+
+  
+    #             await self._recipe_manager.apply_recipe(, transition_time=1.0)
+    #             await asyncio.sleep(sleep_interval)  # Wait sleep_interval seconds before next recipe
 
     def start_party(self):
         """Start party mode with cycling non-music-reactive LED patterns."""

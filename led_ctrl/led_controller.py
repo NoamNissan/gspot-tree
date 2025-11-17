@@ -6,7 +6,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Callable, Dict, Any
 import colorsys
-from colors_array import Colors
+from .colors_array import Colors
 
 # Configuration
 BREATHING_MIN_INTENSITY = 0.2  # Minimum intensity for breathing animation (0.0 = fully off, 1.0 = full brightness)
@@ -18,7 +18,7 @@ try:
     SIMULATION_MODE = False
 except ImportError:
     # Import mock modules
-    from mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
+    from .mock_neopixel import MockNeoPixel as neopixel_class, MockBoard as board
     neopixel = type('neopixel', (), {'NeoPixel': neopixel_class})
     SIMULATION_MODE = True
 

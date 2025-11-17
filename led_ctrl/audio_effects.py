@@ -15,8 +15,8 @@ except ImportError:
     AUDIO_AVAILABLE = False
     print("⚠️  Audio not available - install with: pip install sounddevice numpy")
 
-from pipeline_demo import Effect, Color
-from colors_array import Colors
+from .pipeline_demo import Effect, Color
+from .colors_array import Colors
 
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility

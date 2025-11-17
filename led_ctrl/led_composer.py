@@ -8,15 +8,15 @@ import asyncio
 import time
 import random
 import math
-from led_controller import Color
+from .led_controller import Color
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Dict, List, Optional
 import multiprocessing
 
-from pipeline_demo import PipelineController, TreeStructure
-from recipe_manager import RecipeManager
-from tree_config import load_tree_config
+from .pipeline_demo import PipelineController, TreeStructure
+from .recipe_manager import RecipeManager
+from .tree_config import load_tree_config
 
 
 class ComposerState(Enum):

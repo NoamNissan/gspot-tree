@@ -7,7 +7,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Union
-from pipeline_demo import BlackoutEffect
+from .pipeline_demo import BlackoutEffect
 
 # Parameter Range Classes for Smart Recipes
 @dataclass
@@ -38,7 +38,7 @@ class ChoiceRange(ParameterRange):
     def resolve(self) -> Any:
         return random.choice(self.choices)
 
-from pipeline_demo import (
+from .pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, ColorStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, CircleScanEffect, MarchingEffect, BlocksEffect,
@@ -46,7 +46,7 @@ from pipeline_demo import (
     SpectrumEffect, EnergyEffect, WavelengthEffect, ScrollEffect, BarsEffect, RotationEffect,
     BlendMode, Effect, Color
 )
-from audio_effects import MusicVisualizerEffect, RealTimeAudioProvider, AUDIO_AVAILABLE
+from .audio_effects import MusicVisualizerEffect, RealTimeAudioProvider, AUDIO_AVAILABLE
 
 @dataclass
 class BaseColorConfig:

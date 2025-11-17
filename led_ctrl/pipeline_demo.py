@@ -47,8 +47,8 @@ class TreeStructure:
 
 # Global pipeline configuration
 PIPELINE_FPS = 240  # 240 FPS for very smooth effects
-from led_controller import Color
-from colors_array import Colors
+from .led_controller import Color
+from .colors_array import Colors
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -1013,6 +1013,32 @@ class CrawlerEffect(Effect):
             ))
         return result
 
+class PinkCompressor(Effect):
+    """Changes all colors into shades of pink"""
+
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters['reverse'] = False
+
+    def _apply_effect(self, colors: Colors, elapsed: float) -> List[Color]:
+        import colorsys
+        
+        result = []
+        for c in colors:
+            #r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+##            rgb_to_hsv
+            h,s,v = colorsys.rgb_to_hsv(c.r, c.g, c.b)
+            h = h/4 + 0.75
+            if self.parameters['reverse'] is True:
+                h = 0.75 - h
+            
+            
+            r,g,b = colorsys.hsv_to_rgb(h, s, v)
+            result.append(Color(r,g,b))
+            
+
+        return result
+
 class WaterEffect(Effect):
     """Water ripple simulation"""
     
@@ -1676,7 +1702,7 @@ class PipelineController:
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
-            import mock_neopixel  # This will monkey patch neopixel module
+            from . import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
             import neopixel  # Import after monkey patching
             self.pixels = neopixel.NeoPixel(None, num_pixels, brightness=1.0, auto_write=False, tree_structure=tree_structure)

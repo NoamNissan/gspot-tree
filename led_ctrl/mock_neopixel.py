@@ -9,8 +9,8 @@ import threading
 import json
 import sys
 from typing import Tuple, List
-from constants import PERSISTENT_GUI_PORT
-from ascii_tree_pairs import generate_ascii_tree_with_pairs, load_tree_config
+from .constants import PERSISTENT_GUI_PORT
+from .ascii_tree_pairs import generate_ascii_tree_with_pairs, load_tree_config
 
 
 
@@ -346,6 +346,7 @@ class MockNeoPixel:
         self._pixels = [(0, 0, 0)] * num_pixels
         self._closed = False
         self._dirty = False  # Track if pixels have changed
+        self._gui_created = False
         
         global _persistent_gui, _persistent_mode
         
@@ -353,8 +354,16 @@ class MockNeoPixel:
             # Try to connect to persistent GUI
             self._connect_to_persistent_gui()
         else:
-            # Create own GUI (original behavior)
-            self._create_own_gui()
+            # Don't create GUI immediately - will be created when needed
+            self._setup_gui_creation()
+    
+    def _setup_gui_creation(self):
+        """Setup for GUI creation - will be created when mainloop is started"""
+        print("Setting up for GUI creation")
+        self.client_socket = None
+        self.root = None
+        self.canvas = None
+        self.circles = []
     
     def _connect_to_persistent_gui(self):
         """Connect to persistent GUI via socket"""
@@ -365,7 +374,25 @@ class MockNeoPixel:
             print("🖥️ Connected to persistent GUI")
         except:
             print("🖥️ No persistent GUI found, creating new one...")
-            self._create_own_gui()
+            self._setup_gui_creation()
+    
+    def create_gui(self):
+        """Create the GUI - must be called from main thread"""
+        if self._gui_created:
+            return
+        
+        print("Creating GUI from main thread")
+        self._create_own_gui()
+        self._gui_created = True
+    
+    def start_mainloop(self):
+        """Start the GUI mainloop - must be called from main thread"""
+        if not self._gui_created:
+            self.create_gui()
+        
+        if hasattr(self, 'root') and not self._closed:
+            print("Starting GUI mainloop")
+            self.root.mainloop()
     
     def _create_own_gui(self):
         """Create own GUI window (original behavior)"""

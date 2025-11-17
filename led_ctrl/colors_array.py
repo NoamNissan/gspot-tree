@@ -15,7 +15,7 @@ class Colors:
             self.b = np.array([c.b for c in colors], dtype=np.uint8)
 
     def __getitem__(self, idx):
-        from led_controller import Color
+        from .led_controller import Color
         return Color(self.r[idx], self.g[idx], self.b[idx])
 
     def __setitem__(self, idx, color):
