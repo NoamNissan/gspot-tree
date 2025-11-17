@@ -6,7 +6,7 @@ Interactive command-line interface for testing LED Composer states and recipes
 
 import asyncio
 import sys
-from led_composer import create_led_composer, ComposerState
+from .led_composer import create_led_composer, ComposerState
 
 
 class LEDComposerCLI:
@@ -74,7 +74,7 @@ class LEDComposerCLI:
             
             # Manual options - show first few recipes
             print("🎵 MANUAL RECIPES (first 8):")
-            from recipe_manager import RECIPES
+            from .recipe_manager import RECIPES
             recipe_items = list(RECIPES.items())
             
             for i, (recipe_key, recipe) in enumerate(recipe_items[:8], 9):

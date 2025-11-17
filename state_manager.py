@@ -1,5 +1,5 @@
 from enum import Enum
-from threading import RLock, Thread
+from threading import RLock, Thread, Timer
 from typing import Optional, Callable
 from constants import ChipType, PENDING_SOUND_FILE
 
@@ -54,20 +54,12 @@ class StateManager:
                     # Note: We don't join here as it might block, but we've stopped the audio
                     pass
             
-            try:
-                print(f"Switching lights to music mode for {chip_type} chip")
-                self.light.start_single_active(chip_type)
-            except Exception:
-                # Light failures should not prevent audio
-                print("Warning: Failed to switch lights to music mode")
-                pass
-            
             # Set state before releasing lock
             self._current_song = song_filename
             self._state = SystemState.PLAYING
             print(f"State updated: PLAYING (song='{self._current_song}')")
         
-        # Start playback in a background thread so this method returns immediately
+        # Define playback coroutine that will be used for both single and double chip types
         def playback_coroutine():
             """Coroutine that runs in background thread to play the song."""
             try:
@@ -96,10 +88,46 @@ class StateManager:
                         except Exception as e:
                             print(f"Error in playback callback: {e}")
         
-        # Start the playback thread
-        self._playback_thread = Thread(target=playback_coroutine, daemon=True)
-        self._playback_thread.start()
-        print(f"Playback started in background thread for: {song_filename}")
+        try:
+            if chip_type == ChipType.DOUBLE:
+                print(f"Switching lights to couple_feedback for {chip_type} chip")
+                self.light.start_couple_feedback()
+                # After 5 seconds, switch to couple_active and start music
+                def switch_to_active_and_start_music():
+                    try:
+                        with self._lock:
+                            # Only switch if still in PLAYING state
+                            if self._state == SystemState.PLAYING:
+                                try:
+                                    print(f"Switching lights to couple_active for {chip_type} chip")
+                                    self.light.start_couple_active()
+                                except Exception as e:
+                                    print(f"Warning: Failed to switch lights to couple_active: {e}")
+                                # Start music playback now
+                                self._playback_thread = Thread(target=playback_coroutine, daemon=True)
+                                self._playback_thread.start()
+                                print(f"Playback started in background thread for: {song_filename}")
+                            else:
+                                print(f"State is {self._state}, not starting music playback")
+                    except Exception as e:
+                        print(f"Warning: Error in switch_to_active_and_start_music: {e}")
+                Timer(5.0, switch_to_active_and_start_music).start()
+            else:
+                print(f"Switching lights to music mode for {chip_type} chip")
+                self.light.start_single_active(chip_type)
+                # Start playback immediately for single chip type
+                self._playback_thread = Thread(target=playback_coroutine, daemon=True)
+                self._playback_thread.start()
+                print(f"Playback started in background thread for: {song_filename}")
+        except Exception:
+            # Light failures should not prevent audio
+            print("Warning: Failed to switch lights to music mode")
+            # Still start playback even if lights failed
+            if chip_type != ChipType.DOUBLE:
+                self._playback_thread = Thread(target=playback_coroutine, daemon=True)
+                self._playback_thread.start()
+                print(f"Playback started in background thread for: {song_filename}")
+            pass
 
     def end_song(self) -> None:
         with self._lock:
