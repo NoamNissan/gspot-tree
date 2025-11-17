@@ -47,7 +47,7 @@ class TreeStructure:
 
 # Global pipeline configuration
 PIPELINE_FPS = 240  # 240 FPS for very smooth effects
-from led_controller import Color
+from .led_controller import Color
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -1302,7 +1302,7 @@ class PipelineController:
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
-            import mock_neopixel  # This will monkey patch neopixel module
+            from . import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
         else:
             print("Using real LED hardware")

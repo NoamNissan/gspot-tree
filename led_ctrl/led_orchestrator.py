@@ -19,14 +19,14 @@ import threading
 import time
 import socket
 import json
-from led_controller import Color
+from .led_controller import Color
 # Global audio configuration
 SAMPLING_RATE = 16000  # Default 16kHz for better compatibility
 BANDS_OVERRIDE = None  # CLI override for number of bands
 STROBE_FREQ = 15.0     # Default strobe frequency
 
-from constants import PERSISTENT_GUI_PORT
-from pipeline_demo import (
+from .constants import PERSISTENT_GUI_PORT
+from .pipeline_demo import (
     PipelineController, TransitionMode, BreathingEffect, 
     StrobeEffect, ColorStrobeEffect, SparkleEffect, WaveEffect, RandomFlashEffect, RainbowEffect, LavaLampEffect,
     FireEffect, MeltEffect, FadeEffect, ScanEffect, CircleScanEffect, MarchingEffect, BlocksEffect,
