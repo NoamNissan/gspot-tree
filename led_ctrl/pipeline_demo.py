@@ -14,6 +14,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
+from .constants import NEOPIXEL_SLEEP_RATE
 
 @dataclass
 class TreeStructure:
@@ -1694,6 +1695,9 @@ class EffectPipeline:
 
 class PipelineController:
     """High-level controller for the effects pipeline"""
+
+    GRB = 1
+    RGB = 0
     
     def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = False, tree_structure: TreeStructure = None):
         self.num_pixels = num_pixels
@@ -1706,12 +1710,18 @@ class PipelineController:
             print("Using LED simulation mode")
             import neopixel  # Import after monkey patching
             self.pixels = neopixel.NeoPixel(None, num_pixels, brightness=1.0, auto_write=False, tree_structure=tree_structure)
+            self.simulation = True
+            self.color_order = self.RGB
+            self.sleep_rate = 1/1200
         else:
             # Now import neopixel - will be real or mock depending on above
             print("Using real LED hardware")
             import neopixel
             import board
             self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, pixel_order=neopixel.RGB)
+            self.simulation = False
+            self.color_order = self.GRB
+            self.sleep_rate = NEOPIXEL_SLEEP_RATE # 60 FPS
         
         self.running = False
         self.start_time = 0
@@ -1743,7 +1753,7 @@ class PipelineController:
                 self.pixels.show()
 
                 # Use global FPS setting
-                await asyncio.sleep(1/PIPELINE_FPS)
+                await asyncio.sleep(self.sleep_rate)
             except KeyboardInterrupt as e:
                 print(f"🛑 User interrupted render loop: {e}")
                 self.running = False

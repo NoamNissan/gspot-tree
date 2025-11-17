@@ -6,6 +6,7 @@ Interactive command-line interface for testing LED Composer states and recipes
 
 import asyncio
 import sys
+import threading
 from .led_composer import create_led_composer, ComposerState
 
 
@@ -13,15 +14,19 @@ class LEDComposerCLI:
     def __init__(self):
         self.composer = None
         self.running = False
+        self.gui_root = None  # Reference to GUI root window for closing
     
     async def start(self):
         """Start the LED composer and CLI"""
         print("🎨 LED Composer CLI Demo")
         print("=" * 40)
         
-        # Initialize composer
-        self.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
-        await self.composer.start()
+        # Composer should already be started by main()
+        if not self.composer:
+            # Fallback: initialize composer if not already done
+            self.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
+            await self.composer.start()
+        
         self.running = True
         
         print("✅ LED Composer started")
@@ -148,7 +153,7 @@ class LEDComposerCLI:
     
     async def show_all_recipes(self):
         """Show all recipes and allow direct selection"""
-        from recipe_manager import RECIPES
+        from .recipe_manager import RECIPES
         recipe_items = list(RECIPES.items())
         
         print("\n🎵 ALL RECIPES:")
@@ -198,12 +203,16 @@ class LEDComposerCLI:
             await self.composer.stop()
         print("✅ LED Composer stopped")
         print("👋 Goodbye!")
+        # Close GUI if it exists
+        if self.gui_root:
+            try:
+                self.gui_root.quit()
+            except:
+                pass
 
 
-async def main():
-    """Main CLI demo function"""
-    cli = LEDComposerCLI()
-    
+async def main_async(cli: LEDComposerCLI):
+    """Main async CLI demo function"""
     try:
         await cli.start()
     except KeyboardInterrupt:
@@ -215,5 +224,53 @@ async def main():
             await cli.composer.stop()
 
 
+def main():
+    """Main entry point that handles GUI integration"""
+    print("🖥️ Starting LED Composer Demo in simulation mode with GUI")
+    
+    # Create CLI instance
+    cli = LEDComposerCLI()
+    
+    # Initialize composer to get controller
+    cli.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
+    
+    # Start the controller to initialize GUI
+    asyncio.run(cli.composer.start())
+    
+    # Get the GUI instance from the controller
+    gui_instance = None
+    if hasattr(cli.composer, 'controller') and hasattr(cli.composer.controller, 'pixels'):
+        if hasattr(cli.composer.controller.pixels, 'start_mainloop'):
+            gui_instance = cli.composer.controller.pixels
+    
+    if gui_instance:
+        # Store reference to GUI root for closing
+        if hasattr(gui_instance, 'root'):
+            cli.gui_root = gui_instance.root
+        
+        # Run the async CLI logic in a background thread
+        async_thread = threading.Thread(
+            target=lambda: asyncio.run(main_async(cli)),
+            daemon=True,
+            name="LED-Composer-CLI-Async"
+        )
+        async_thread.start()
+        
+        # Run GUI mainloop in the main thread
+        print("🖥️ Starting GUI mainloop in main thread")
+        try:
+            gui_instance.start_mainloop()
+        except KeyboardInterrupt:
+            print("\n🛑 Shutting down...")
+        finally:
+            # Cleanup
+            cli.running = False
+            if cli.composer:
+                asyncio.run(cli.composer.stop())
+    else:
+        print("⚠️ No GUI instance found, running without GUI")
+        asyncio.run(main_async(cli))
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
