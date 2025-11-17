@@ -8,69 +8,13 @@ import socket
 import threading
 import json
 from typing import Tuple, List
-from dataclasses import dataclass
-try:
-    # When imported as part of the package (preferred)
-    from .constants import PERSISTENT_GUI_PORT, LEDLayoutConstants
-except ImportError:
-    # Fallback when this file is imported as a top-level module
-    from constants import PERSISTENT_GUI_PORT, LEDLayoutConstants
+from constants import PERSISTENT_GUI_PORT
+
+
 
 # Global persistent GUI instance
 _persistent_gui = None
 _persistent_mode = False
-
-@dataclass
-class CircleConfig:
-    """Configuration for a single circle"""
-    radius_from_center: float
-
-@dataclass
-class LineConfig:
-    """Configuration for circles on a single line"""
-    circles: List[CircleConfig]
-
-@dataclass
-class LEDLayoutConfig:
-    """Configuration for all LED lines
-    
-    Example usage:
-        # Create default configuration using predefined constants
-        config = LEDLayoutConfig.create_default_config()
-        
-        # Create custom configuration - each line can have 2-3 circles at different distances
-        custom_config = LEDLayoutConfig.create_custom_config([
-            [100, 150],      # Line 0: 2 circles at radius 100 and 150
-            [120, 180, 220], # Line 1: 3 circles at radius 120, 180, 220
-            [90, 200],       # Line 2: 2 circles at radius 90 and 200
-            [110, 160, 210], # Line 3: 3 circles at radius 110, 160, 210
-            # ... etc for all 20 lines
-        ])
-    """
-    lines: List[LineConfig]
-    
-    @classmethod
-    def create_default_config(cls):
-        """Create default configuration for 20 lines using constants"""
-        lines = []
-        for line_idx in range(20):
-            # Use predefined radius values from constants
-            radius_list = LEDLayoutConstants.LAYOUT_DATA[line_idx]
-            circles = []
-            for radius in radius_list:
-                radius *= LEDLayoutConstants.RADIUS_MULTIPLIER
-                circles.append(CircleConfig(radius))
-            lines.append(LineConfig(circles))
-        return cls(lines)
-    
-    @classmethod
-    def create_custom_config(cls, line_configs: List[List[float]]):
-        """Create custom configuration from list of radius lists for each line"""
-        lines = []
-        for radius_list in line_configs:
-            circles = [CircleConfig(radius) for radius in radius_list]
-            lines.append(LineConfig(circles))
-        return cls(lines)
 
 def set_persistent_mode(enabled: bool):
     """Enable or disable persistent GUI mode"""
@@ -80,9 +24,10 @@ def set_persistent_mode(enabled: bool):
 class PersistentGUI:
     """Persistent GUI that can be shared across multiple app runs"""
     
-    def __init__(self, num_pixels: int, verbose: bool = True):
+    def __init__(self, num_pixels: int, verbose: bool = True, tree_structure=None):
         self.num_pixels = num_pixels
         self.verbose = verbose
+        self.tree_structure = tree_structure
         self.root = tk.Tk()
         self.root.title(f"LED Simulator - {num_pixels} pixels (Persistent Mode)")
         self.canvas = tk.Canvas(self.root, width=1000, height=800, bg='black')
@@ -107,9 +52,6 @@ class PersistentGUI:
         inner_radius = max_radius / 5
         led_size = 5
         pair_spacing = 12
-        
-        # Create layout configuration
-        layout_config = LEDLayoutConfig.create_default_config()
         
         # Draw circle boundaries first
         self.canvas.create_oval(
@@ -136,23 +78,12 @@ class PersistentGUI:
             y2 = center_y + max_radius * math.sin(angle)
             self.canvas.create_line(x1, y1, x2, y2, fill='darkgray', width=1)
         
-        pair_positions = []
-        
-        for line in range(num_lines):
-            line_config = layout_config.lines[line]
-            line_angle = line * line_angle_step
-            
-            for circle_idx, circle_config in enumerate(line_config.circles):
-                # Use the individual radius from each circle configuration
-                r = circle_config.radius_from_center
-                
-                pair_center_x = center_x + r * math.cos(line_angle)
-                pair_center_y = center_y + r * math.sin(line_angle)
-                
-                base_angle = line_angle + math.pi/2
-                random_offset = random.uniform(-math.pi/4, math.pi/4)
-                pair_angle = base_angle + random_offset
-                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        if self.tree_structure:
+            # Use structured layout based on tree configuration
+            pair_positions = self._generate_structured_layout(center_x, center_y, max_radius, inner_radius)
+        else:
+            # Use original random layout
+            pair_positions = self._generate_random_layout(center_x, center_y, max_radius, inner_radius)
         
         led_index = 0
         for pair_idx, (pair_center_x, pair_center_y, pair_angle) in enumerate(pair_positions):
@@ -213,7 +144,6 @@ class PersistentGUI:
             buffer = ""
             while True:
                 data = client.recv(1024)
-                print(f"Received data: {data}")
                 if not data:
                     break
                 
@@ -274,6 +204,76 @@ class PersistentGUI:
         if self.verbose:
             print(f"🎨 GUI: Updated {len(pixels)} LEDs")
     
+    def _generate_random_layout(self, center_x, center_y, max_radius, inner_radius):
+        """Generate random LED layout (original behavior)"""
+        num_lines = 20
+        line_angle_step = 2 * math.pi / num_lines
+        pair_positions = []
+        
+        for line in range(num_lines):
+            pairs_on_line = random.randint(2, 3)
+            line_angle = line * line_angle_step
+            available_length = max_radius - inner_radius - 40
+            segment_length = available_length / pairs_on_line
+            
+            for pair_idx in range(pairs_on_line):
+                segment_start = inner_radius + 20 + pair_idx * segment_length
+                segment_end = segment_start + segment_length
+                r = random.uniform(segment_start, segment_end)
+                
+                pair_center_x = center_x + r * math.cos(line_angle)
+                pair_center_y = center_y + r * math.sin(line_angle)
+                
+                base_angle = line_angle + math.pi/2
+                random_offset = random.uniform(-math.pi/4, math.pi/4)
+                pair_angle = base_angle + random_offset
+                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        
+        return pair_positions
+    
+    def _generate_structured_layout(self, center_x, center_y, max_radius, inner_radius):
+        """Generate structured LED layout based on tree configuration"""
+        pair_positions = []
+        num_branches = len(self.tree_structure.branches)
+        line_angle_step = 2 * math.pi / num_branches
+        available_length = max_radius - inner_radius - 40
+        
+        # Define prototypes
+        three_pair_positions = [0.10, 0.55, 1.00]  # 10%, 55%, 100%
+        two_pair_positions = [0.325, 0.775]          # 32.5%, 77.5%
+        
+        for branch_idx, branch_leds in enumerate(self.tree_structure.branches):
+            line_angle = branch_idx * line_angle_step
+            
+            # Determine number of pairs from branch LED count
+            num_pairs = len(branch_leds) // 2
+            
+            # Choose prototype based on pair count
+            if num_pairs == 3:
+                positions = three_pair_positions
+            elif num_pairs == 2:
+                positions = two_pair_positions
+            else:
+                # Fallback for other counts
+                positions = [0.3, 0.7] if num_pairs == 2 else [0.15, 0.55, 0.95]
+            
+            for pair_idx in range(min(num_pairs, len(positions))):
+                # Calculate position along branch with small random error
+                base_distance = inner_radius + 20 + positions[pair_idx] * available_length
+                distance_error = random.uniform(-10, 10)  # Small random error
+                r = base_distance + distance_error
+                
+                pair_center_x = center_x + r * math.cos(line_angle)
+                pair_center_y = center_y + r * math.sin(line_angle)
+                
+                # Apply random orientation (preserve existing behavior)
+                base_angle = line_angle + math.pi/2
+                random_offset = random.uniform(-math.pi/4, math.pi/4)
+                pair_angle = base_angle + random_offset
+                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        
+        return pair_positions
+    
     def _on_window_close(self):
         """Handle window close event"""
         if self.server_socket:
@@ -290,37 +290,26 @@ class PersistentGUI:
 class MockNeoPixel:
     """Mock NeoPixel class that can connect to persistent GUI or create its own"""
     
-    def __init__(self, pin, num_pixels: int, brightness: float = 1.0, auto_write: bool = True):
-        print("MockNeoPixel initialized")
+    def __init__(self, pin, num_pixels: int, brightness: float = 1.0, auto_write: bool = True, tree_structure=None, pixel_order=None):
         self.num_pixels = num_pixels
         self.brightness = brightness
         self.auto_write = auto_write
+        self.tree_structure = tree_structure
         self._pixels = [(0, 0, 0)] * num_pixels
         self._closed = False
         self._dirty = False  # Track if pixels have changed
-        self._gui_created = False
         
         global _persistent_gui, _persistent_mode
         
         if _persistent_mode:
             # Try to connect to persistent GUI
-            print("connecting to persistent GUI")
             self._connect_to_persistent_gui()
         else:
-            # Don't create GUI immediately - will be created when needed
-            self._setup_gui_creation()
-    
-    def _setup_gui_creation(self):
-        """Setup for GUI creation - will be created when mainloop is started"""
-        print("Setting up for GUI creation")
-        self.client_socket = None
-        self.root = None
-        self.canvas = None
-        self.circles = []
+            # Create own GUI (original behavior)
+            self._create_own_gui()
     
     def _connect_to_persistent_gui(self):
         """Connect to persistent GUI via socket"""
-        print("Connecting to persistent GUI")
         self.client_socket = None
         try:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -328,29 +317,10 @@ class MockNeoPixel:
             print("🖥️ Connected to persistent GUI")
         except:
             print("🖥️ No persistent GUI found, creating new one...")
-            self._setup_gui_creation()
-    
-    def create_gui(self):
-        """Create the GUI - must be called from main thread"""
-        if self._gui_created:
-            return
-        
-        print("Creating GUI from main thread")
-        self._create_own_gui()
-        self._gui_created = True
-    
-    def start_mainloop(self):
-        """Start the GUI mainloop - must be called from main thread"""
-        if not self._gui_created:
-            self.create_gui()
-        
-        if hasattr(self, 'root') and not self._closed:
-            print("Starting GUI mainloop")
-            self.root.mainloop()
+            self._create_own_gui()
     
     def _create_own_gui(self):
         """Create own GUI window (original behavior)"""
-        print("Creating own GUI")
         self.client_socket = None
         self.root = tk.Tk()
         self.root.title(f"LED Simulator - {self.num_pixels} pixels")
@@ -359,7 +329,7 @@ class MockNeoPixel:
         
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
         
-        # Create LED visualization (same as before)
+        # Create LED visualization
         self.circles = []
         center_x, center_y = 500, 400
         max_radius = 300
@@ -367,29 +337,12 @@ class MockNeoPixel:
         led_size = 5
         pair_spacing = 12
         
-        # Create layout configuration
-        layout_config = LEDLayoutConfig.create_default_config()
-        
-        num_lines = 20
-        line_angle_step = 2 * math.pi / num_lines
-        
-        pair_positions = []
-        
-        for line in range(num_lines):
-            line_config = layout_config.lines[line]
-            line_angle = line * line_angle_step
-            
-            for circle_idx, circle_config in enumerate(line_config.circles):
-                # Use the individual radius from each circle configuration
-                r = circle_config.radius_from_center
-                
-                pair_center_x = center_x + r * math.cos(line_angle)
-                pair_center_y = center_y + r * math.sin(line_angle)
-                
-                base_angle = line_angle + math.pi/2
-                random_offset = random.uniform(-math.pi/4, math.pi/4)
-                pair_angle = base_angle + random_offset
-                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        if self.tree_structure:
+            # Use structured layout based on tree configuration
+            pair_positions = self._generate_structured_layout(center_x, center_y, max_radius, inner_radius)
+        else:
+            # Use original random layout
+            pair_positions = self._generate_random_layout(center_x, center_y, max_radius, inner_radius)
         
         led_index = 0
         for pair_idx, (pair_center_x, pair_center_y, pair_angle) in enumerate(pair_positions):
@@ -430,6 +383,8 @@ class MockNeoPixel:
         )
         
         # Draw radial lines
+        num_lines = 20
+        line_angle_step = 2 * math.pi / num_lines
         for line in range(num_lines):
             angle = line * line_angle_step
             x1 = center_x + inner_radius * math.cos(angle)
@@ -480,16 +435,12 @@ class MockNeoPixel:
                 self.client_socket.send(message.encode())
             except:
                 pass
-        elif hasattr(self, 'root') and self.root and hasattr(self, 'canvas') and self.canvas:
-            # Update own GUI using thread-safe method
-            def update_gui():
-                if not self._closed and hasattr(self, 'canvas') and hasattr(self, 'circles') and index < len(self.circles):
-                    r, g, b = color
-                    hex_color = f"#{r:02x}{g:02x}{b:02x}"
-                    self.canvas.itemconfig(self.circles[index], fill=hex_color)
-            
-            # Use root.after() for thread-safe GUI updates
-            self.root.after(0, update_gui)
+        else:
+            # Update own GUI
+            r, g, b = color
+            hex_color = f"#{r:02x}{g:02x}{b:02x}"
+            self.canvas.itemconfig(self.circles[index], fill=hex_color)
+            self.root.update_idletasks()
     
     def show(self):
         """Update all pixels"""
@@ -505,15 +456,85 @@ class MockNeoPixel:
                 self.client_socket.send(message.encode())
             except:
                 pass
-        elif hasattr(self, 'root') and self.root:
+        else:
             for i, color in enumerate(self._pixels):
                 self._update_pixel(i, color)
-            # Don't call root.update() here as it might block
+            self.root.update()
     
     def fill(self, color: Tuple[int, int, int]):
         """Fill all pixels with the same color"""
         for i in range(self.num_pixels):
             self[i] = color
+    
+    def _generate_random_layout(self, center_x, center_y, max_radius, inner_radius):
+        """Generate random LED layout (original behavior)"""
+        num_lines = 20
+        line_angle_step = 2 * math.pi / num_lines
+        pair_positions = []
+        
+        for line in range(num_lines):
+            pairs_on_line = random.randint(2, 3)
+            line_angle = line * line_angle_step
+            available_length = max_radius - inner_radius - 40
+            segment_length = available_length / pairs_on_line
+            
+            for pair_idx in range(pairs_on_line):
+                segment_start = inner_radius + 20 + pair_idx * segment_length
+                segment_end = segment_start + segment_length
+                r = random.uniform(segment_start, segment_end)
+                
+                pair_center_x = center_x + r * math.cos(line_angle)
+                pair_center_y = center_y + r * math.sin(line_angle)
+                
+                base_angle = line_angle + math.pi/2
+                random_offset = random.uniform(-math.pi/4, math.pi/4)
+                pair_angle = base_angle + random_offset
+                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        
+        return pair_positions
+    
+    def _generate_structured_layout(self, center_x, center_y, max_radius, inner_radius):
+        """Generate structured LED layout based on tree configuration"""
+        pair_positions = []
+        num_branches = len(self.tree_structure.branches)
+        line_angle_step = 2 * math.pi / num_branches
+        available_length = max_radius - inner_radius - 40
+        
+        # Define prototypes
+        three_pair_positions = [0.10, 0.55, 1.00]  # 10%, 55%, 100%
+        two_pair_positions = [0.325, 0.775]          # 32.5%, 77.5%
+        
+        for branch_idx, branch_leds in enumerate(self.tree_structure.branches):
+            line_angle = branch_idx * line_angle_step
+            
+            # Determine number of pairs from branch LED count
+            num_pairs = len(branch_leds) // 2
+            
+            # Choose prototype based on pair count
+            if num_pairs == 3:
+                positions = three_pair_positions
+            elif num_pairs == 2:
+                positions = two_pair_positions
+            else:
+                # Fallback for other counts
+                positions = [0.3, 0.7] if num_pairs == 2 else [0.15, 0.55, 0.95]
+            
+            for pair_idx in range(min(num_pairs, len(positions))):
+                # Calculate position along branch with small random error
+                base_distance = inner_radius + 20 + positions[pair_idx] * available_length
+                distance_error = random.uniform(-10, 10)  # Small random error
+                r = base_distance + distance_error
+                
+                pair_center_x = center_x + r * math.cos(line_angle)
+                pair_center_y = center_y + r * math.sin(line_angle)
+                
+                # Apply random orientation (preserve existing behavior)
+                base_angle = line_angle + math.pi/2
+                random_offset = random.uniform(-math.pi/4, math.pi/4)
+                pair_angle = base_angle + random_offset
+                pair_positions.append((pair_center_x, pair_center_y, pair_angle))
+        
+        return pair_positions
     
     def _on_window_close(self):
         """Handle window close event"""
@@ -535,11 +556,11 @@ class MockNeoPixel:
     def __len__(self):
         return self.num_pixels
 
-def start_persistent_gui(num_pixels: int = 100, verbose: bool = True):
+def start_persistent_gui(num_pixels: int = 100, verbose: bool = True, tree_structure=None):
     """Start persistent GUI in separate process"""
     global _persistent_gui
     if _persistent_gui is None:
-        _persistent_gui = PersistentGUI(num_pixels, verbose=verbose)
+        _persistent_gui = PersistentGUI(num_pixels, verbose=verbose, tree_structure=tree_structure)
         _persistent_gui.run()
 
 # Mock board module
@@ -552,8 +573,6 @@ class MockBoard:
 import sys
 from types import ModuleType
 
-print("MockNeoPixel module loaded")
-
 # Create mock neopixel module
 neopixel_module = ModuleType('neopixel')
 neopixel_module.NeoPixel = MockNeoPixel
@@ -565,3 +584,6 @@ board_module.D18 = MockBoard.D18
 board_module.D12 = MockBoard.D12
 board_module.D21 = MockBoard.D21
 sys.modules['board'] = board_module
+
+neopixel_module.RGB="RGB"
+

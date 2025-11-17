@@ -13,8 +13,41 @@ import numpy as np
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
-from .led_controller import Color
-from .constants import NEOPIXEL_AUTO_WRITE, NEOPIXEL_SLEEP_RATE
+from dataclasses import dataclass
+
+@dataclass
+class TreeStructure:
+    """Tree LED structure with rings and branches"""
+    rings: List[List[int]]     # rings[ring_idx] = [led_indices...]
+    branches: List[List[int]]  # branches[branch_idx] = [led_indices...]
+    
+    def __post_init__(self):
+        """Calculate skewed branches after initialization"""
+        self.skewed_branches = self._calculate_skewed_branches()
+    
+    def _calculate_skewed_branches(self) -> List[List[int]]:
+        """Create skewed branch groupings"""
+        if not self.branches:
+            return []
+        
+        # Find max branch length
+        max_length = max(len(branch) for branch in self.branches)
+        skewed = []
+        
+        for led_pos in range(max_length):
+            skewed_group = []
+            for branch_idx, branch in enumerate(self.branches):
+                # Take LED at position led_pos from branch branch_idx
+                if led_pos < len(branch):
+                    skewed_group.append(branch[led_pos])
+            if skewed_group:
+                skewed.append(skewed_group)
+        
+        return skewed
+
+# Global pipeline configuration
+PIPELINE_FPS = 240  # 240 FPS for very smooth effects
+from led_controller import Color
 
 class TransitionMode(Enum):
     STATIC = "static"
@@ -68,30 +101,9 @@ class BaseColorLayer:
             return [color] * num_pixels
 
 class Effect:
-    """
-    Base class for all effects.
-    
-    Effects modify the appearance of colors as they pass through the rendering pipeline.
-    Each effect can be enabled/disabled, have parameters configured, and maintains internal
-    state for time-based animations.
-    
-    Attributes:
-        effect_id: Unique identifier for this effect instance
-        enabled: Whether this effect is currently active
-        parameters: Dictionary of configurable effect parameters
-        blend_mode: How this effect blends with underlying colors
-        internal_state: Internal state dictionary for effect-specific data
-        start_time: Timestamp when the effect was created
-    """
+    """Base class for all effects"""
     
     def __init__(self, effect_id: str = None):
-        """
-        Initialize a new effect instance.
-        
-        Args:
-            effect_id: Optional unique identifier for this effect. If not provided,
-                      a UUID will be generated automatically.
-        """
         self.effect_id = effect_id or str(uuid.uuid4())
         self.enabled = True
         self.parameters = {}
@@ -100,52 +112,17 @@ class Effect:
         self.start_time = time.time()
     
     def apply(self, colors: List[Color], elapsed: float) -> List[Color]:
-        """
-        Apply effect to color array.
-        
-        This is the public method that checks if the effect is enabled before
-        calling the internal _apply_effect method.
-        
-        Args:
-            colors: List of Color objects representing current pixel colors
-            elapsed: Time elapsed since effect start (in seconds)
-            
-        Returns:
-            List of Color objects after effect application. If effect is disabled,
-            returns colors unchanged.
-        """
+        """Apply effect to color array"""
         if not self.enabled:
             return colors
         return self._apply_effect(colors, elapsed)
     
     def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
-        """
-        Override this in subclasses to implement the actual effect logic.
-        
-        This method is called by apply() after checking if the effect is enabled.
-        Subclasses should implement their specific visual effect here.
-        
-        Args:
-            colors: List of Color objects representing current pixel colors
-            elapsed: Time elapsed since effect start (in seconds)
-            
-        Returns:
-            List of Color objects after effect application. The default implementation
-            returns colors unchanged.
-        """
+        """Override this in subclasses"""
         return colors
     
     def update_parameters(self, parameters: Dict[str, Any]):
-        """
-        Update effect parameters.
-        
-        Merges the provided parameters dictionary into the existing parameters.
-        This allows partial updates without overriding all parameters.
-        
-        Args:
-            parameters: Dictionary of parameter names to values to update.
-                       Existing parameters not in this dict will remain unchanged.
-        """
+        """Update effect parameters"""
         self.parameters.update(parameters)
 
 class BreathingEffect(Effect):
@@ -194,6 +171,335 @@ class StrobeEffect(Effect):
         else:
             # Strobe off - dark
             return [Color(0, 0, 0)] * len(colors)
+
+class ColorStrobeEffect(Effect):
+    """Color strobe effect - accepts any color"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'frequency': 10.0,  # Hz - strobes per second
+            'color': Color(255, 255, 255)  # Default white, can be overridden
+        }
+
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        cycle_time = 1.0 / self.parameters['frequency']
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if phase < 0.5:  # 50% duty cycle - on for half the cycle
+            # Strobe on - use specified color
+            return [self.parameters['color']] * len(colors)
+        else:
+            # Strobe off - black
+            return [Color(0, 0, 0)] * len(colors)
+
+class RingRippleEffect(Effect):
+    """Ring ripple effect using tree structure"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'speed': 2.0,
+            'color': Color(0, 255, 255),
+            'fade_time': 0.5,
+            'direction': 'out'
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+
+        speed = self.parameters['speed']
+        fade_time = self.parameters['fade_time']
+        direction = self.parameters['direction']
+        effect_color = self.parameters['color']
+        
+        cycle_time = len(self.mask) / speed
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if direction == 'in':
+            phase = 1.0 - phase
+            
+        current_ring = phase * len(self.mask)
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                ring_distance = abs(i - current_ring)
+                
+                if ring_distance < fade_time * len(self.mask):
+                    intensity = max(0, 1.0 - ring_distance / (fade_time * len(self.mask)))
+                    
+                    for led_idx in self.tree_structure.rings[ring_idx]:
+                        if led_idx < len(result):
+                            # Additive blending
+                            result[led_idx] = Color(
+                                min(255, result[led_idx].r + int(effect_color.r * intensity)),
+                                min(255, result[led_idx].g + int(effect_color.g * intensity)),
+                                min(255, result[led_idx].b + int(effect_color.b * intensity))
+                            )
+        
+        return result
+
+class BranchSweepEffect(Effect):
+    """Branch sweep effect using tree structure"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'color': Color(255, 100, 0),
+            'width': 3,
+            'direction': 'cw'
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        width = self.parameters['width']
+        direction = self.parameters['direction']
+        effect_color = self.parameters['color']
+        
+        cycle_time = 1.0 / speed
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if direction == 'ccw':
+            phase = 1.0 - phase
+            
+        current_branch = phase * len(self.mask)
+        result = colors.copy()
+        
+        for i in range(width):
+            branch_pos = int((current_branch + i) % len(self.mask))
+            branch_idx = self.mask[branch_pos]
+            
+            if branch_idx < len(self.tree_structure.branches):
+                center_distance = abs(i - width // 2)
+                intensity = max(0.3, 1.0 - center_distance / (width / 2))
+                
+                for led_idx in self.tree_structure.branches[branch_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + int(effect_color.r * intensity)),
+                            min(255, result[led_idx].g + int(effect_color.g * intensity)),
+                            min(255, result[led_idx].b + int(effect_color.b * intensity))
+                        )
+        
+        return result
+
+class RainbowRingsEffect(Effect):
+    """Rainbow colors emanate through rings"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'outward',  # 'outward' or 'inward'
+            'hue_spread': 1.0  # How much hue changes between rings
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                # Calculate hue based on ring position and time
+                if direction == 'inward':
+                    ring_pos = len(self.mask) - 1 - i
+                else:
+                    ring_pos = i
+                
+                hue = (elapsed * speed + ring_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                ring_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.rings[ring_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + ring_color.r),
+                            min(255, result[led_idx].g + ring_color.g),
+                            min(255, result[led_idx].b + ring_color.b)
+                        )
+        
+        return result
+
+class RainbowBranchesEffect(Effect):
+    """Rainbow colors cascade from branch to branch"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'hue_spread': 1.0  # How much hue changes between branches
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, branch_idx in enumerate(self.mask):
+            if branch_idx < len(self.tree_structure.branches):
+                # Calculate hue based on branch position and time
+                if direction == 'ccw':
+                    branch_pos = len(self.mask) - 1 - i
+                else:
+                    branch_pos = i
+                
+                hue = (elapsed * speed + branch_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                branch_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.branches[branch_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + branch_color.r),
+                            min(255, result[led_idx].g + branch_color.g),
+                            min(255, result[led_idx].b + branch_color.b)
+                        )
+        
+        return result
+
+class RainbowVortexEffect(Effect):
+    """Each ring contains full rainbow and spins at different speeds"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.rings))) if tree_structure else []
+        self.parameters = {
+            'base_speed': 1.0,
+            'speed_ratio': 1.5,  # How much faster inner rings are
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'alternating': False  # If true, rings alternate direction
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        base_speed = self.parameters['base_speed']
+        speed_ratio = self.parameters['speed_ratio']
+        direction = self.parameters['direction']
+        alternating = self.parameters['alternating']
+        
+        result = colors.copy()
+        
+        for i, ring_idx in enumerate(self.mask):
+            if ring_idx < len(self.tree_structure.rings):
+                ring_leds = self.tree_structure.rings[ring_idx]
+                if not ring_leds:
+                    continue
+                
+                # Calculate individual speed for each ring
+                ring_speed = base_speed * (speed_ratio ** i)
+                
+                # Apply direction and alternating
+                if direction == 'ccw':
+                    ring_speed = -ring_speed
+                if alternating and i % 2 == 1:  # Odd rings reverse direction
+                    ring_speed = -ring_speed
+                
+                # Each LED in ring gets different hue based on position + time
+                for j, led_idx in enumerate(ring_leds):
+                    if led_idx < len(result):
+                        # Hue based on LED position in ring + spinning time offset
+                        hue = (j / len(ring_leds) + elapsed * ring_speed) % 1.0
+                        
+                        # Convert HSV to RGB
+                        import colorsys
+                        r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                        led_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                        
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + led_color.r),
+                            min(255, result[led_idx].g + led_color.g),
+                            min(255, result[led_idx].b + led_color.b)
+                        )
+        
+        return result
+
+class RainbowBranchesSkewedEffect(Effect):
+    """Rainbow colors cascade through skewed branch groupings"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, mask: List[int] = None, effect_id: str = None):
+        super().__init__(effect_id)
+        self.tree_structure = tree_structure
+        self.mask = mask or list(range(len(tree_structure.skewed_branches))) if tree_structure else []
+        self.parameters = {
+            'speed': 1.0,
+            'direction': 'cw',  # 'cw' or 'ccw'
+            'hue_spread': 1.0  # How much hue changes between skewed groups
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        if not self.tree_structure:
+            return colors
+            
+        speed = self.parameters['speed']
+        direction = self.parameters['direction']
+        hue_spread = self.parameters['hue_spread']
+        
+        result = colors.copy()
+        
+        for i, skewed_idx in enumerate(self.mask):
+            if skewed_idx < len(self.tree_structure.skewed_branches):
+                # Calculate hue based on skewed group position and time
+                if direction == 'ccw':
+                    group_pos = len(self.mask) - 1 - i
+                else:
+                    group_pos = i
+                
+                hue = (elapsed * speed + group_pos * hue_spread / len(self.mask)) % 1.0
+                
+                # Convert HSV to RGB
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                group_color = Color(int(r * 255), int(g * 255), int(b * 255))
+                
+                for led_idx in self.tree_structure.skewed_branches[skewed_idx]:
+                    if led_idx < len(result):
+                        # Additive blending
+                        result[led_idx] = Color(
+                            min(255, result[led_idx].r + group_color.r),
+                            min(255, result[led_idx].g + group_color.g),
+                            min(255, result[led_idx].b + group_color.b)
+                        )
+        
+        return result
 
 class SparkleEffect(Effect):
     """Random sparkle effect"""
@@ -428,6 +734,41 @@ class FadeEffect(Effect):
             ))
         return result
 
+class CircleScanEffect(Effect):
+    """Circular scanner effect that wraps around"""
+    
+    def __init__(self, effect_id: str = None):
+        super().__init__(effect_id)
+        self.parameters = {
+            'speed': 2.0,
+            'width': 5
+        }
+    
+    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
+        num_pixels = len(colors)
+        if num_pixels == 0:
+            return colors
+        
+        # Calculate scanner position (wraps around instead of bouncing)
+        cycle_time = 2.0 / self.parameters['speed']
+        phase = (elapsed % cycle_time) / cycle_time
+        scanner_pos = phase * (num_pixels - 1)  # 0 to (num_pixels - 1), same as ScanEffect
+        
+        # Create scanner beam (exact same as ScanEffect)
+        positions = np.arange(num_pixels)
+        distances = np.abs(positions - scanner_pos)
+        intensities = np.maximum(0, 1 - distances / self.parameters['width'])
+        
+        result = []
+        for i, base_color in enumerate(colors):
+            mult = intensities[i]
+            result.append(Color(
+                int(base_color.r * mult),
+                int(base_color.g * mult),
+                int(base_color.b * mult)
+            ))
+        return result
+
 class ScanEffect(Effect):
     """Scanner/cylon eye effect"""
     
@@ -561,32 +902,6 @@ class CrawlerEffect(Effect):
                 int(base_color.g * mult),
                 int(base_color.b * mult)
             ))
-        return result
-
-class PinkCompressor(Effect):
-    """Changes all colors into shades of pink"""
-
-    def __init__(self, effect_id: str = None):
-        super().__init__(effect_id)
-        self.parameters['reverse'] = False
-
-    def _apply_effect(self, colors: List[Color], elapsed: float) -> List[Color]:
-        import colorsys
-        
-        result = []
-        for c in colors:
-            #r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-##            rgb_to_hsv
-            h,s,v = colorsys.rgb_to_hsv(c.r, c.g, c.b)
-            h = h/4 + 0.75
-            if self.parameters['reverse'] is True:
-                h = 0.75 - h
-            
-            
-            r,g,b = colorsys.hsv_to_rgb(h, s, v)
-            result.append(Color(r,g,b))
-            
-
         return result
 
 class WaterEffect(Effect):
@@ -831,8 +1146,8 @@ class RainEffect(Effect):
         for i, base_color in enumerate(colors):
             drop_intensity = self.droplets[i]
             result.append(Color(
-                min(255, int(base_color.r + drop_intensity * 100)),
-                min(255, int(base_color.g + drop_intensity * 100)),
+                min(255, int(base_color.r + drop_intensity * 50)),
+                min(255, int(base_color.g + drop_intensity * 50)),
                 min(255, int(base_color.b + drop_intensity * 255))
             ))
         return result
@@ -979,32 +1294,25 @@ class EffectPipeline:
 
 class PipelineController:
     """High-level controller for the effects pipeline"""
-
-    GRB = 1
-    RGB = 0
     
-    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = True):
+    def __init__(self, num_pixels: int, pin: int = 18, force_simulation: bool = False, tree_structure: TreeStructure = None):
         self.num_pixels = num_pixels
         self.pipeline = EffectPipeline(num_pixels)
+        self.tree_structure = tree_structure
         
         # Import mock neopixel only if simulation is requested
         if force_simulation:
-            from . import mock_neopixel  # This will monkey patch neopixel module
+            import mock_neopixel  # This will monkey patch neopixel module
             print("Using LED simulation mode")
-            self.simulation = True
-            self.color_order = self.RGB
-            self.sleep_rate = 1/1200
         else:
             print("Using real LED hardware")
-            self.simulation = False
-            self.color_order = self.GRB
-            self.sleep_rate = NEOPIXEL_SLEEP_RATE # 60 FPS
         
         # Now import neopixel - will be real or mock depending on above
         import neopixel
         import board
         
-        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=NEOPIXEL_AUTO_WRITE)
+        #self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False)
+        self.pixels = neopixel.NeoPixel(getattr(board, f'D{pin}'), num_pixels, brightness=1.0, auto_write=False, pixel_order=neopixel.RGB)
         self.running = False
         self.start_time = 0
     
@@ -1022,7 +1330,6 @@ class PipelineController:
     
     async def run_loop(self):
         """Main rendering loop"""
-        print("Running pipeline loop")
         while self.running:
             elapsed = time.time() - self.start_time
             
@@ -1031,14 +1338,76 @@ class PipelineController:
             
             # Update physical/mock LEDs
             for i, color in enumerate(colors):
-                if self.color_order == self.RGB:
-                    self.pixels[i] = (color.r, color.g, color.b)
-                elif self.color_order == self.GRB:
-                    self.pixels[i] = (color.g, color.r, color.b)
+                self.pixels[i] = (color.r, color.g, color.b)
             self.pixels.show()
             
-            await asyncio.sleep(self.sleep_rate)
+            # Use global FPS setting
+            await asyncio.sleep(1/PIPELINE_FPS)
     
+    def trigger_strobe_sync(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
+        """Synchronous direct strobe - use fill method with frequency compensation"""
+        print(f"🔥 Starting {frequency}Hz {color} strobe for {duration}s...")
+        
+        # Non-linear compensation - more aggressive at higher frequencies
+        # At 1Hz: ~0%, At 35Hz: ~25%
+        if frequency <= 1:
+            compensation_factor = 0
+        else:
+            # Quadratic growth: more compensation needed at higher frequencies
+            normalized_freq = (frequency - 1) / 34  # 0 to 1 for 1Hz to 35Hz
+            compensation_factor = min(0.25, normalized_freq ** 1.2 * 0.25)
+        
+        adjusted_frequency = frequency / (1 - compensation_factor)
+        
+        print(f"🔧 Compensation: {compensation_factor*100:.1f}% -> {adjusted_frequency:.1f} Hz internal")
+        
+        start_time = time.time()
+        half_period = 1.0 / (2 * adjusted_frequency)  # Use adjusted frequency
+        cycle_count = 0
+        
+        # Try fill method first (should be fastest)
+        try:
+            color_tuple = (color.r, color.g, color.b)
+            black_tuple = (0, 0, 0)
+            
+            while time.time() - start_time < duration:
+                # Color
+                self.pixels.fill(color_tuple)
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                # Black
+                self.pixels.fill(black_tuple)
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                cycle_count += 1
+                
+        except AttributeError:
+            print("Fill method not available, using slice assignment")
+            # Fallback to slice assignment with pre-allocated arrays
+            color_array = [(color.r, color.g, color.b)] * self.num_pixels
+            black_array = [(0, 0, 0)] * self.num_pixels
+            
+            while time.time() - start_time < duration:
+                self.pixels[:] = color_array
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                self.pixels[:] = black_array
+                self.pixels.show()
+                time.sleep(half_period)
+                
+                cycle_count += 1
+        
+        elapsed = time.time() - start_time
+        actual_freq = cycle_count / elapsed
+        print(f"🔥 Strobe complete: {cycle_count} cycles in {elapsed:.2f}s = {actual_freq:.1f} Hz")
+
+    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255)):
+        """Async wrapper for sync strobe"""
+        self.trigger_strobe_sync(frequency, duration, color)
+
     # Convenience methods
     def set_solid_color(self, color: Color):
         """Set solid color base"""
@@ -1069,6 +1438,30 @@ class PipelineController:
         """Add sparkle effect"""
         effect = SparkleEffect()
         effect.update_parameters({'density': density})
+        return self.pipeline.add_effect(effect)
+    
+    def add_ring_ripple(self, mask: List[int] = None, speed: float = 2.0, color: Color = Color(0, 255, 255)) -> str:
+        """Add ring ripple effect"""
+        effect = RingRippleEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_branch_sweep(self, mask: List[int] = None, speed: float = 1.0, color: Color = Color(255, 100, 0)) -> str:
+        """Add branch sweep effect"""
+        effect = BranchSweepEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_ring_ripple(self, mask: List[int] = None, speed: float = 2.0, color: Color = Color(0, 255, 255)) -> str:
+        """Add ring ripple effect"""
+        effect = RingRippleEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
+        return self.pipeline.add_effect(effect)
+    
+    def add_branch_sweep(self, mask: List[int] = None, speed: float = 1.0, color: Color = Color(255, 100, 0)) -> str:
+        """Add branch sweep effect"""
+        effect = BranchSweepEffect(self.tree_structure, mask)
+        effect.update_parameters({'speed': speed, 'color': color})
         return self.pipeline.add_effect(effect)
     
     def add_wave(self, speed: float = 2.0) -> str:
@@ -1107,7 +1500,7 @@ class PipelineController:
 
 async def recipe_demo1():
     """Demonstrate the pipeline system"""
-    controller = PipelineController(100, force_simulation=True)
+    controller = PipelineController(100, force_simulation=False)
     await controller.start()
     
     try:
@@ -1159,7 +1552,7 @@ async def recipe_demo1():
 
 async def recipe_demo2():
     """Red-pink transition with breathing effect"""
-    controller = PipelineController(100, force_simulation=True)
+    controller = PipelineController(100, force_simulation=False)
     await controller.start()
     
     try:
@@ -1169,11 +1562,13 @@ async def recipe_demo2():
         print("🔴🩷 Recipe Demo 2: Red-Pink Transition + Breathing")
         
         # Set up red-pink fade transition with breathing
-        red_pink_colors = [Color(255, 0, 0), Color(255, 192, 203)]
-        controller.pipeline.set_base_colors(red_pink_colors, TransitionMode.FADE, speed=0.1)
+        #red_pink_colors = [Color(255, 0, 0), Color(255, 192, 203)]
+        red_pink_colors = [Color(255, 0, 0), Color(150, 0, 150)]
+        
+        controller.pipeline.set_base_colors(red_pink_colors, TransitionMode.FADE, speed=0.01)
         
         # Add breathing effect
-        breathing_id = controller.add_breathing(speed=0.3, min_intensity=0.2)
+        breathing_id = controller.add_breathing(speed=0.1, min_intensity=0.1, max_intensity=1)
         
         # Add random flash effect (2Hz white flashes)
         flash_id = controller.add_random_flash(frequency=2.0)
