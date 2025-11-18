@@ -304,11 +304,11 @@ class RingRippleEffect(Effect):
                     
                     for led_idx in self.tree_structure.rings[ring_idx]:
                         if led_idx < len(result):
-                            # Additive blending
+                            # Additive blending with overflow protection
                             result[led_idx] = Color(
-                                min(255, result[led_idx].r + int(effect_color.r * intensity)),
-                                min(255, result[led_idx].g + int(effect_color.g * intensity)),
-                                min(255, result[led_idx].b + int(effect_color.b * intensity))
+                                min(255, int(result[led_idx].r) + int(effect_color.r * intensity)),
+                                min(255, int(result[led_idx].g) + int(effect_color.g * intensity)),
+                                min(255, int(result[led_idx].b) + int(effect_color.b * intensity))
                             )
         
         return result
@@ -513,11 +513,11 @@ class RainbowVortexEffect(Effect):
                         r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
                         led_color = Color(int(r * 255), int(g * 255), int(b * 255))
                         
-                        # Additive blending
+                        # Additive blending with overflow protection
                         result[led_idx] = Color(
-                            min(255, result[led_idx].r + led_color.r),
-                            min(255, result[led_idx].g + led_color.g),
-                            min(255, result[led_idx].b + led_color.b)
+                            min(255, int(result[led_idx].r) + led_color.r),
+                            min(255, int(result[led_idx].g) + led_color.g),
+                            min(255, int(result[led_idx].b) + led_color.b)
                         )
         
         return result
@@ -1834,7 +1834,7 @@ class PipelineController:
         actual_freq = cycle_count / elapsed
         print(f"🔥 Strobe complete: {cycle_count} cycles in {elapsed:.2f}s = {actual_freq:.1f} Hz")
 
-    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255), duty_cycle: float = 0.25):
+    async def trigger_strobe(self, frequency: float, duration: float, color: Color = Color(255, 255, 255), duty_cycle: float = 0.15):
         """Async wrapper for sync strobe"""
         self.trigger_strobe_sync(frequency, duration, color, duty_cycle)
 

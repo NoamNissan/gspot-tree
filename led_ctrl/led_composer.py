@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 import multiprocessing
 
 from .pipeline_demo import PipelineController, TreeStructure
-from .recipe_manager import RecipeManager
+from .recipe_manager import RecipeManager, EffectConfig, FloatRange, ChoiceRange
 from .tree_config import load_tree_config
 
 
@@ -71,7 +71,7 @@ class LEDComposer(LEDComposerInterface):
         
         # Initialize pipeline components
         self.controller = PipelineController(num_pixels, force_simulation=force_simulation, tree_structure=tree_structure)
-        self.recipe_manager = RecipeManager(self.controller)
+        self.recipe_manager = RecipeManager(self.controller, tree_structure)
         
         # State management
         self.current_state = ComposerState.IDLE
@@ -84,25 +84,26 @@ class LEDComposer(LEDComposerInterface):
         self.recipe_task = None
         
         # State configuration
-        self.auto_advertise_timeout = 0.0    # Default: never auto-advertise
-        self.advertise_duration = 3.0        # 3 seconds of advertise
-        self.manual_timeout = 600.0          # 10 minutes manual -> advertise
+        self.advertise_duration_limit = 30.0       # 
         self.feedback_timeout = 5.0          # Default feedback timeout
         self.strobe_duration = 1.0           # Default strobe duration
         
         # Parameter system - organized by state but flattened
         self.parameters = {
+            # Flow
+            'long_recipe_time': 60,
+            'long_recipe_transition': 15,
+            'short_recipe_time': 30,
+            'short_recipe_transition': 5,
+
+            # Debug
+            'time_factor': 1,
+
             # General parameters (affect multiple states)
             'feedback_timeout': 5.0,
             'strobe_duration': 1.0,
-            
-            # Single feedback parameters
-            'single_strobe_frequency': 15.0,
-            'single_strobe_duty_cycle': 0.25,
-            
-            # Couple feedback parameters  
-            'couple_strobe_frequency': 15.0,
-            'couple_strobe_duty_cycle': 0.25,
+            'strobe_frequency': 15.0,
+            'strobe_duty_cycle': 0.25,
             
             # Idle parameters
             'idle_breathing_speed': 0.5,
@@ -190,11 +191,6 @@ class LEDComposer(LEDComposerInterface):
     def get_current_state(self) -> ComposerState:
         """Get current state"""
         return self.current_state
-    
-    async def set_auto_advertise_timeout(self, timeout: float):
-        """Set auto-advertise timeout (0 = never)"""
-        self.auto_advertise_timeout = timeout
-        print(f"🕐 Auto-advertise timeout set to {timeout}s ({'never' if timeout == 0 else f'{timeout}s'})")
 
     async def set_manual_recipe(self, recipe_name: str):
         """Set manual recipe and switch to manual mode"""
@@ -239,27 +235,79 @@ class LEDComposer(LEDComposerInterface):
             self.running = False
             raise  # Re-raise to crash the program
     
+    def _get_long_transition_recipe_times(self):
+        factor = self.parameters['time_factor']
+        transition_time = self.parameters['long_recipe_transition'] * factor
+        long_recipe_time = self.parameters['long_recipe_time'] * factor
+
+        return long_recipe_time, transition_time
+
+    def _get_short_transition_recipe_times(self):
+        factor = self.parameters['time_factor']
+        transition_time = self.parameters['short_recipe_transition'] * factor
+        short_recipe_time = self.parameters['short_recipe_time'] * factor
+        return short_recipe_time, transition_time
+
+
     # State-specific loops (each runs until state changes)
     async def _idle_state_loop(self):
         """Calm, serene patterns with slow changes"""
         while self.current_state == ComposerState.IDLE:
             # Sunset breathing for 60 seconds
-            await self._load_recipe("sunset_breathing", transition_time=15.0)
-            await self._sleep_while_in_state(60)
+
+            long_recipe_time, transition_time = self._get_long_transition_recipe_times()
+
+            # TODO: randomize a different rainbow each time
+            # TODO avoid white base color here
+            await self._load_recipe("ring_ripple", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            await self._load_recipe("rainbow_vortex", 5)
+            await self._sleep_while_in_state(10)
+
+            await self._load_recipe("rainbow_vortex_anti", 5)
+            await self._sleep_while_in_state(10)
+
+            await self._load_recipe("rainbow_blackout", 0)
+            await self._sleep_while_in_state(10)
+
+            await self._load_recipe("rainbow_rings", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            await self._load_recipe("ring_ripple", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            await self._load_recipe("sunset_breathing", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            await self._load_recipe("water_ripples", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
             
-            if self.current_state != ComposerState.IDLE:
-                break
-                
-            # Water ripples for 45 seconds
-            await self._load_recipe("water_ripples", transition_time=15.0)
-            await self._sleep_while_in_state(45)
+            await self._load_recipe("fade_cycle", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            # TODO: change parameters inside (run faster or slower)
+            await self._load_recipe("fire_demo", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
             
-            if self.current_state != ComposerState.IDLE:
-                break
-                
-            # Fade cycle for 50 seconds
-            await self._load_recipe("fade_cycle", transition_time=15.0)
-            await self._sleep_while_in_state(50)
+            await self._load_recipe("lava_lamp", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+            
+            await self._load_recipe("power_bars", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+            await self._load_recipe("water_ripples", transition_time)
+            await self._sleep_while_in_state(long_recipe_time)
+
+    async def _birthday_state_loop(self):
+
+            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+            # Rainbow requires white bg color so use short transition
+            await self._load_recipe("rainbow", 0.0)
+            await self._sleep_while_in_state(short_recipe_time)
+
+
+
     
     def _generate_edge_biased_color(self, color1, color2):
         """Generate edge-biased color between two colors"""
@@ -275,119 +323,83 @@ class LEDComposer(LEDComposerInterface):
         
         return Color(r, g, b)
 
-    async def _single_feedback_loop(self):
-        """Blue/cyan strobe for 2s then fade to black"""
-        # Generate blue-cyan edge-biased color
-        blue = Color(0, 0, 255)
-        cyan = Color(0, 255, 255)
-        color = self._generate_edge_biased_color(blue, cyan)
+    async def _strobe_and_fade_feedback(self, color1, color2, current_state, next_state):
+        """Strobe with edge-biased color then fade to black"""
+        color = self._generate_edge_biased_color(color1, color2)
         
-        print("strobe")
         # Strobe with configurable parameters
         await self.controller.trigger_strobe(
-            self.parameters['single_strobe_frequency'], 
+            self.parameters['strobe_frequency'], 
             self.parameters['strobe_duration'], 
             color
         )
         
         print("strobe complete, fading to black")
-        # Create a custom fade recipe with the exact strobe color as source
-        # Use remaining time as fade duration
-        remaining_time = self.parameters['feedback_timeout'] - self.parameters['strobe_duration']  # Total timeout minus strobe time
+        remaining_time = self.parameters['feedback_timeout'] - self.parameters['strobe_duration']
         fade_recipe = self._create_fade_from_color_recipe(color, Color(0, 0, 0), remaining_time)
         await self.recipe_manager.apply_recipe(fade_recipe, transition_time=0.0)
         print("fade recipe applied - fading from strobe color to black")
 
-        # Wait for remaining time
         print("waiting for timeout...")
-        await self._sleep_while_in_state(remaining_time)  # Wait for fade to complete
+        await self._sleep_while_in_state(remaining_time)
         print("timeout complete")
         
-        # Auto-transition to not_active after recipe finishes
-        if self.current_state == ComposerState.SINGLE_FEEDBACK:
-            print("🔄 Transitioning from SINGLE_FEEDBACK to NOT_ACTIVE")
-            await self.set_state(ComposerState.NOT_ACTIVE)
+        if self.current_state == current_state:
+            print(f"🔄 Transitioning from {current_state} to {next_state}")
+            await self.set_state(next_state)
         else:
-            print(f"⚠️ Current state is {self.current_state}, not SINGLE_FEEDBACK")
+            print(f"⚠️ Current state is {self.current_state}, not {current_state}")
+
+    async def _single_feedback_loop(self):
+        """Blue/cyan strobe for 2s then fade to black"""
+        blue = Color(0, 0, 255)
+        cyan = Color(0, 255, 255)
+        await self._strobe_and_fade_feedback(blue, cyan, ComposerState.SINGLE_FEEDBACK, ComposerState.NOT_ACTIVE)
     
     async def _single_active_state_loop(self):
         """Happy, energetic music-reactive patterns"""
         while self.current_state == ComposerState.SINGLE_ACTIVE:
             # Smart music spectrum - stays active until state changes
-            await self._load_recipe("smart_music_spectrum", transition_time=2.0)
+
+            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+
+            await self._load_recipe("smart_music_spectrum", transition_time)
+            await self._sleep_while_in_state(short_recipe_time)
             
-            # Keep running music spectrum until state changes
-            while self.current_state == ComposerState.SINGLE_ACTIVE:
-                await self._sleep_while_in_state(30)  # Check every 30 seconds
-    
+            await self._load_recipe("music_pulse", transition_time)
+            await self._sleep_while_in_state(short_recipe_time)
+
+            await self._load_recipe("smart_spectrum_enhanced", transition_time)
+            await self._sleep_while_in_state(short_recipe_time)
+
+
     async def _couple_feedback_loop(self):
         """Red/purple strobe then fade to black"""
-        # Generate red-purple edge-biased color
         red = Color(255, 0, 0)
         purple = Color(255, 0, 255)
-        color = self._generate_edge_biased_color(red, purple)
-        
-        print("strobe")
-        # Strobe with configurable parameters
-        await self.controller.trigger_strobe(
-            self.parameters['couple_strobe_frequency'], 
-            self.parameters['strobe_duration'], 
-            color
-        )
-        
-        print("strobe complete, fading to black")
-        # Create a custom fade recipe with the exact strobe color as source
-        # Use remaining time as fade duration
-        remaining_time = self.parameters['feedback_timeout'] - self.parameters['strobe_duration']  # Total timeout minus strobe time
-        fade_recipe = self._create_fade_from_color_recipe(color, Color(0, 0, 0), remaining_time)
-        await self.recipe_manager.apply_recipe(fade_recipe, transition_time=0.0)
-        print("fade recipe applied - fading from strobe color to black")
-        
-        # Wait for remaining time
-        print("waiting for timeout...")
-        await self._sleep_while_in_state(remaining_time)  # Wait for fade to complete
-        print("timeout complete")
-        
-        # Auto-transition to not_active after recipe finishes
-        if self.current_state == ComposerState.COUPLE_FEEDBACK:
-            print("🔄 Transitioning from COUPLE_FEEDBACK to NOT_ACTIVE")
-            await self.set_state(ComposerState.NOT_ACTIVE)
-        else:
-            print(f"⚠️ Current state is {self.current_state}, not COUPLE_FEEDBACK")
+        await self._strobe_and_fade_feedback(red, purple, ComposerState.COUPLE_FEEDBACK, ComposerState.NOT_ACTIVE)
     
     async def _couple_active_state_loop(self):
         """Euphoric red/pink/purple patterns"""
         while self.current_state == ComposerState.COUPLE_ACTIVE:
-            # Fire demo for 35 seconds
-            await self._load_recipe("fire_demo", transition_time=2.5)
-            await self._sleep_while_in_state(35)
-            
-            if self.current_state != ComposerState.COUPLE_ACTIVE:
-                break
+            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+
+            await self._load_recipe("music_pulse_couple", transition_time)
+            await self._sleep_while_in_state(short_recipe_time)
+
+            # TODO use pink red compressor on the rest
                 
-            # Lava lamp for 30 seconds
-            await self._load_recipe("lava_lamp", transition_time=3.0)
-            await self._sleep_while_in_state(30)
-            
-            if self.current_state != ComposerState.COUPLE_ACTIVE:
-                break
-                
-            # Power bars for 40 seconds
-            await self._load_recipe("power_bars", transition_time=2.0)
-            await self._sleep_while_in_state(40)
-    
     async def _advertise_loop(self):
         """High-energy attention-grabbing patterns for 3 seconds"""
         import random
-        scanner_recipes = ["scanner", "circle_scanner"]
-        recipe = random.choice(scanner_recipes)
-        await self._load_recipe(recipe, transition_time=0.1)
-        await self._sleep_while_in_state(self.advertise_duration)
-        
-        # Auto-transition back to idle
-        if self.current_state == ComposerState.ADVERTISE:
-            await self.set_state(ComposerState.IDLE)
-    
+        scanner_recipes = ["scanner", "circle_scanner","complex_demo","glitch_matrix"]
+
+        while self.current_state == ComposerState.ADVERTISE:
+            recipe = random.choice(scanner_recipes)
+            await self._load_recipe(recipe, transition_time=5)
+            await self._sleep_while_in_state(10)
+
+
     async def _manual_loop(self):
         """Manual mode - just wait until state changes"""
         while self.current_state == ComposerState.MANUAL:
@@ -401,9 +413,6 @@ class LEDComposer(LEDComposerInterface):
                 break
             await asyncio.sleep(0.5)  # Check every 500ms
         
-        # Check for auto-transitions during sleep
-        await self._check_auto_transitions()
-    
     def _create_fade_to_black_recipe(self, start_color):
         """Create a recipe that fades from start_color to black"""
         from .recipe_manager import Recipe, BaseColorConfig, EffectConfig, TransitionMode
@@ -461,18 +470,6 @@ class LEDComposer(LEDComposerInterface):
             ),
             effects=[]
         )
-    
-    async def _check_auto_transitions(self):
-        """Check for automatic state transitions"""
-        # Skip auto-advertise if timeout is 0 (disabled)
-        if self.auto_advertise_timeout == 0.0:
-            return
-            
-        elapsed_since_activity = time.time() - self.last_activity_time
-        
-        # Auto-transition to advertise after inactivity from any state
-        if elapsed_since_activity > self.auto_advertise_timeout:
-            await self.set_state(ComposerState.ADVERTISE)
 
     
     async def _load_recipe(self, recipe_name: str, transition_time: float = 2.0):

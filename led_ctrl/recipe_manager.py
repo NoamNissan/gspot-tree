@@ -241,7 +241,7 @@ class RecipeManager:
             effect = StrobeEffect()
         elif effect_type == "white_strobe":
             effect = ColorStrobeEffect()
-            effect.parameters['color'] = Color(255, 255, 255)  # Set to white
+            #effect.parameters['color'] = Color(255, 255, 255)  # Set to white
         elif effect_type == "ring_ripple":
             from .pipeline_demo import RingRippleEffect
             effect = RingRippleEffect(self.tree_structure)
@@ -271,7 +271,7 @@ class RecipeManager:
             effect = RandomFlashEffect()
         elif effect_type == "rainbow":
             effect = RainbowEffect()
-            effect.blend_mode = BlendMode.REPLACE  # Replace base colors with rainbow
+            effect.blend_mode = BlendMode.REPLACE
         elif effect_type == "lava_lamp":
             effect = LavaLampEffect()
         elif effect_type == "fire":
@@ -300,6 +300,7 @@ class RecipeManager:
             effect = PowerEffect()
         elif effect_type == "blackout":
             effect = BlackoutEffect()
+            effect.blend_mode = BlendMode.REPLACE
         elif effect_type == "rain":
             effect = RainEffect()
         elif effect_type == "walking":
@@ -386,23 +387,45 @@ RECIPES = {
             speed=0.5
         ),
         effects=[
-            EffectConfig("wave", {"speed":0.5, "amplitude": 0.5}),
-            EffectConfig("sparkle", {"density": 0.01})
+            EffectConfig("wave", {"speed":0.5, "amplitude": 0.}),
+            EffectConfig("sparkle", {"density": 0.0025})
         ]
     ),
     
+
+    # TODO avoid white base color here
     "rainbow": Recipe(
         name="Pure Rainbow",
         description="Classic rainbow cycling effect",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 255, 255)],  # Dummy base color
-            mode=TransitionMode.STATIC
+            colors=[Color(0, 0, 0)],
+            mode=TransitionMode.STATIC,
         ),
         effects=[
-            EffectConfig("rainbow", {"speed": 0.3})
+            # EffectConfig("fade_to_color", {"target_color": Color(255, 255, 255), "duration": 5.0})
+            EffectConfig("rainbow", {"speed": 0.2})
         ]
     ),
     
+    # TODO avoid white base color here
+    "rainbow_blackout": Recipe(
+        name="Pure Rainbow",
+        description="Classic rainbow cycling effect",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0), Color(255, 255, 255)],
+            mode=TransitionMode.FADE,
+        ),
+        effects=[
+            EffectConfig("rainbow", {"speed": 0.5})
+            ,EffectConfig("blackout", {
+                "shutdown_mode": ChoiceRange(["sequential"]),
+                "restore_mode": ChoiceRange(["sequential", "instant"]),
+                "shutdown_duration": FloatRange(4.0, 10.0),
+                "restore_duration": FloatRange(10, 5.0),
+                "hold_duration": 0.0
+            })
+        ]
+    ),
     "smart_spectrum_enhanced": Recipe(
         name="Smart Spectrum Enhanced",
         description="Randomized enhanced spectrum with variable bands",
@@ -549,19 +572,6 @@ RECIPES = {
         ]
     ),
     
-    "rainbow": Recipe(
-        name="Pure Rainbow",
-        description="Classic rainbow cycling effect",
-        base_colors=BaseColorConfig(
-            colors=[Color(255, 255, 255)],  # Dummy base color
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("rainbow", {"speed": 0.3})
-        ]
-    ),
-    
-
     "music_spectrum_c": Recipe(
         name="Music Spectrum Analyzer (Center-Out)",
         description="Real-time audio spectrum visualization growing from center",
@@ -722,13 +732,27 @@ RECIPES = {
         name="Music Pulse",
         description="Colors pulse with music",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 0, 0), Color(0, 0, 255)],  # Red-blue fade
+            colors=[Color(255, 0, 255), Color(0, 0, 255)],
             mode=TransitionMode.FADE,
             speed=0.2
         ),
         effects=[
-            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),  # Much lower sensitivity
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
             EffectConfig("random_flash", {"frequency": 2.0})
+        ]
+    ),
+    
+    "music_pulse_couple": Recipe(
+        name="Music Pulse Couple",
+        description="Red/pink colors pulse with music",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 100), Color(255, 0, 0)],
+            mode=TransitionMode.FADE,
+            speed=0.2
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("random_flash", {"frequency": 2.0, "flash_color": Color(0, 255, 255)})
         ]
     ),
     
@@ -753,8 +777,8 @@ RECIPES = {
         name="Spectrum Analyzer",
         description="LedFx-style spectrum analyzer bars",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
+            colors=[Color(0, 0, 0),Color(0, 0, 120)],  # Black base
+            mode=TransitionMode.FADE
         ),
         effects=[
             EffectConfig("spectrum", {"sensitivity": 1.0})
@@ -781,7 +805,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("wavelength", {"speed": 1.0})
+            EffectConfig("wavelength", {"speed": 0.5})
         ]
     ),
     
@@ -826,12 +850,12 @@ RECIPES = {
         name="Fire Demo",
         description="Flickering fire effect",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 100, 0), Color(210, 0, 0)],  # Orange to red
+            colors=[Color(255, 150, 0), Color(210, 0, 0)],  # Orange to red
             mode=TransitionMode.FADE,
             speed=0.4
         ),
         effects=[
-            EffectConfig("fire", {"speed": 0.005, "intensity": 10})
+            EffectConfig("fire", {"speed": FloatRange(0.005,0.2), "intensity": 10})
         ]
     ),
     
@@ -839,11 +863,21 @@ RECIPES = {
         name="Circle Scanner",
         description="Circular scanner that wraps around the strip",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 255, 255)],  # White
-            mode=TransitionMode.STATIC
+            colors=[
+                Color(255, 0, 0),      # Red
+                Color(0, 255, 0),      # Green
+                Color(0, 0, 255),      # Blue
+                Color(255, 255, 0),    # Yellow
+                Color(255, 0, 255),    # Magenta
+                Color(0, 255, 255),    # Cyan
+                Color(255, 255, 255),  # White
+                Color(255, 128, 0)     # Orange
+            ],
+            mode=TransitionMode.RANDOM,
+            speed=FloatRange(0.03,0.25)
         ),
         effects=[
-            EffectConfig("circle_scan", {"speed": 5.0, "width": 8})
+            EffectConfig("circle_scan", {"speed": FloatRange(0.3,5), "width": 8})
         ]
     ),
 
@@ -851,11 +885,21 @@ RECIPES = {
         name="Scanner",
         description="Cylon eye scanner effect",
         base_colors=BaseColorConfig(
-            colors=[Color(255, 0, 0)],  # Red
-            mode=TransitionMode.STATIC
+            colors=[
+                Color(255, 0, 0),      # Red
+                Color(0, 255, 0),      # Green
+                Color(0, 0, 255),      # Blue
+                Color(255, 255, 0),    # Yellow
+                Color(255, 0, 255),    # Magenta
+                Color(0, 255, 255),    # Cyan
+                Color(255, 255, 255),  # White
+                Color(255, 128, 0)     # Orange
+            ],
+            mode=TransitionMode.RANDOM,
+            speed=FloatRange(0.03,0.25)
         ),
         effects=[
-            EffectConfig("scan", {"speed":0.55, "width": 5})
+            EffectConfig("scan", {"speed":FloatRange(0.3,5), "width": 8})
         ]
     ),
     
@@ -864,11 +908,11 @@ RECIPES = {
         description="Matrix-style digital rain",
         base_colors=BaseColorConfig(
             colors=[Color(0, 80, 0),Color(0, 140, 0)],
-            mode=TransitionMode.FADE,
+            mode=ChoiceRange([TransitionMode.FADE, TransitionMode.PAIR_BLEND]),
             speed=0.2
         ),
         effects=[
-            EffectConfig("rain", {"speed": 1.0, "density": 0.12})
+            EffectConfig("rain", {"speed": 3.0, "density": 0.12})
         ]
     ),
     
@@ -936,6 +980,13 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("power", {"level": 1.0, "direction": 1})  # Full power = all LEDs
+            ,EffectConfig("blackout", {
+                "shutdown_mode": ChoiceRange(["sequential"]),
+                "restore_mode": ChoiceRange(["sequential", "instant"]),
+                "shutdown_duration": FloatRange(3.0, 10.0),
+                "restore_duration": FloatRange(0.0, 5.0),
+                "hold_duration": 0.0
+            })
         ]
     ),
     
@@ -969,11 +1020,11 @@ RECIPES = {
         name="Pixel Crawler",
         description="Crawling pixel with tail",
         base_colors=BaseColorConfig(
-            colors=[Color(0, 255, 255)],  # Cyan
-            mode=TransitionMode.STATIC
+            colors=[Color(0, 255, 255),Color(0, 255,0)],  # Cyan
+            mode=TransitionMode.CYCLE
         ),
         effects=[
-            EffectConfig("crawler", {"speed": 2.5, "tail_length": 12})
+            EffectConfig("crawler", {"speed": 10, "tail_length": 40})
         ]
     ),
     
@@ -1060,7 +1111,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_rings", {"speed": 0.5, "direction": "outward", "hue_spread": 1.0})
+            EffectConfig("rainbow_rings", {"speed": 0.1, "direction": "outward", "hue_spread": 0.27})
         ]
     ),
     
@@ -1072,7 +1123,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_branches", {"speed": 0.2, "direction": "cw", "hue_spread": 1.0})
+            EffectConfig("rainbow_branches", {"speed": 0.1, "direction": "cw", "hue_spread": 0.4})
         ]
     ),
     
@@ -1084,7 +1135,19 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_vortex", {"base_speed": 1.0, "speed_ratio": 0.9, "direction": "cw", "alternating": False})
+            EffectConfig("rainbow_vortex", {"base_speed": 0.4, "speed_ratio": 0.99, "direction": "cw", "alternating": False})
+        ]
+    ),
+
+    "rainbow_vortex_anti": Recipe(
+        name="Rainbow Vortex",
+        description="Each ring contains full rainbow spinning at different speeds",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 0)],  # Black base
+            mode=TransitionMode.STATIC
+        ),
+        effects=[
+            EffectConfig("rainbow_vortex", {"base_speed": 0.4, "speed_ratio": 1.0102, "direction": "cw", "alternating": False})
         ]
     ),
     
@@ -1096,7 +1159,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_vortex", {"base_speed": 1.0, "speed_ratio": 0.9, "direction": "cw", "alternating": True})
+            EffectConfig("rainbow_vortex", {"base_speed": 21, "speed_ratio": 0.9, "direction": "cw", "alternating": True})
         ]
     ),
     
@@ -1108,7 +1171,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_branches_skewed", {"speed": 1.0, "direction": "cw", "hue_spread": 1.0})
+            EffectConfig("rainbow_branches_skewed", {"speed": 0.01, "direction": "cw", "hue_spread": 1.0})
         ]
     ),
     
