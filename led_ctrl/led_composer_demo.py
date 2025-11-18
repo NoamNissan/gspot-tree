@@ -21,10 +21,16 @@ class LEDComposerCLI:
         print("🎨 LED Composer CLI Demo")
         print("=" * 40)
         
-        # Composer should already be started by main()
+        # Initialize composer if not already done
         if not self.composer:
-            # Fallback: initialize composer if not already done
             self.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
+        
+        # Start composer if not already running
+        # Check if composer has a running flag (for LEDComposer class)
+        if hasattr(self.composer, 'running') and not self.composer.running:
+            await self.composer.start()
+        elif not hasattr(self.composer, 'running'):
+            # For other composer types, just try to start
             await self.composer.start()
         
         self.running = True
@@ -231,13 +237,10 @@ def main():
     # Create CLI instance
     cli = LEDComposerCLI()
     
-    # Initialize composer to get controller
+    # Initialize composer to get controller (GUI is created during initialization)
     cli.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
     
-    # Start the controller to initialize GUI
-    asyncio.run(cli.composer.start())
-    
-    # Get the GUI instance from the controller
+    # Get the GUI instance from the controller (no need to start yet)
     gui_instance = None
     if hasattr(cli.composer, 'controller') and hasattr(cli.composer.controller, 'pixels'):
         if hasattr(cli.composer.controller.pixels, 'start_mainloop'):
@@ -249,6 +252,7 @@ def main():
             cli.gui_root = gui_instance.root
         
         # Run the async CLI logic in a background thread
+        # This will start the composer and run_loop in the same event loop
         async_thread = threading.Thread(
             target=lambda: asyncio.run(main_async(cli)),
             daemon=True,
