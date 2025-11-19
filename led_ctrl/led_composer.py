@@ -8,6 +8,7 @@ import asyncio
 import time
 import random
 import math
+import select
 from .led_controller import Color
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -29,6 +30,11 @@ class ComposerState(Enum):
     ADVERTISE = "advertise"
     MANUAL = "manual"
     NOT_ACTIVE = "not_active"
+
+    # Non basic states
+    BIRTHDAY = "birthday"
+    BAD_SONGS = "bad_songs"
+    STARWARS = "starwars"
 
 
 class LEDComposerInterface(ABC):
@@ -91,9 +97,9 @@ class LEDComposer(LEDComposerInterface):
         # Parameter system - organized by state but flattened
         self.parameters = {
             # Flow
-            'long_recipe_time': 60,
-            'long_recipe_transition': 15,
-            'short_recipe_time': 30,
+            'long_recipe_time': 45,
+            'long_recipe_transition': 10,
+            'short_recipe_time': 20,
             'short_recipe_transition': 5,
 
             # Debug
@@ -163,7 +169,10 @@ class LEDComposer(LEDComposerInterface):
         """Immediately switch to new state with optional feedback timeout"""
         if self.current_state == new_state:
             return
-            
+
+        if 'list' in kwargs and isinstance(kwargs['list'], ComposerState):
+            new_state = kwargs['list']
+
         print(f"🎵 State change: {self.current_state.value} → {new_state.value}")
         
         # Cancel current recipe logic
@@ -217,6 +226,12 @@ class LEDComposer(LEDComposerInterface):
                 await self._manual_loop()
             elif self.current_state == ComposerState.NOT_ACTIVE:
                 await self._not_active_loop()
+            elif self.current_state == ComposerState.BIRTHDAY:
+                await self._birthday_state_loop()
+            elif self.current_state == ComposerState.BAD_SONGS:
+                await self._bad_songs_state_loop()
+            elif self.current_state == ComposerState.STARWARS:
+                await self._starwars_state_loop()
         except KeyboardInterrupt as e:
             print(f"🛑 User interrupted recipe loop: {e}")
             self.running = False
@@ -249,65 +264,79 @@ class LEDComposer(LEDComposerInterface):
         return short_recipe_time, transition_time
 
 
+    async def _play_recipe_playlist(self, recipes, state):
+        """Play a randomized playlist of recipes while in given state"""
+        while self.current_state == state:
+            # Shuffle recipes but keep sequences intact
+            random.shuffle(recipes)
+            
+            for item in recipes:
+                if self.current_state != state:
+                    break
+                    
+                if isinstance(item, list):
+                    # Play sequence in order
+                    for recipe_name, trans, duration in item:
+                        await self._load_recipe(recipe_name, trans)
+                        await self._sleep_while_in_state(duration)
+                else:
+                    # Single recipe
+                    recipe_name, trans, duration = item
+                    await self._load_recipe(recipe_name, trans)
+                    await self._sleep_while_in_state(duration)
+
     # State-specific loops (each runs until state changes)
     async def _idle_state_loop(self):
         """Calm, serene patterns with slow changes"""
-        while self.current_state == ComposerState.IDLE:
-            # Sunset breathing for 60 seconds
-
-            long_recipe_time, transition_time = self._get_long_transition_recipe_times()
-
-            # TODO: randomize a different rainbow each time
-            # TODO avoid white base color here
-            await self._load_recipe("ring_ripple", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            await self._load_recipe("rainbow_vortex", 5)
-            await self._sleep_while_in_state(10)
-
-            await self._load_recipe("rainbow_vortex_anti", 5)
-            await self._sleep_while_in_state(10)
-
-            await self._load_recipe("rainbow_blackout", 0)
-            await self._sleep_while_in_state(10)
-
-            await self._load_recipe("rainbow_rings", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            await self._load_recipe("ring_ripple", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            await self._load_recipe("sunset_breathing", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            await self._load_recipe("water_ripples", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-            
-            await self._load_recipe("fade_cycle", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            # TODO: change parameters inside (run faster or slower)
-            await self._load_recipe("fire_demo", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-            
-            await self._load_recipe("lava_lamp", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-            
-            await self._load_recipe("power_bars", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
-
-            await self._load_recipe("water_ripples", transition_time)
-            await self._sleep_while_in_state(long_recipe_time)
+        long_recipe_time, transition_time = self._get_long_transition_recipe_times()
+        
+        # Define recipe playlist - tuples are (recipe_name, transition, duration)
+        # Lists are sequences that play together
+        recipes = [
+            ("digital_rain", transition_time, long_recipe_time),
+            ("ring_ripple", transition_time, long_recipe_time),
+            [  # This sequence stays together
+                ("rainbow_vortex", 5, long_recipe_time/3),
+                ("rainbow_vortex_anti", 5, long_recipe_time/3),
+                ("rainbow_blackout", 0, long_recipe_time/3),
+            ],
+            ("rainbow_rings", transition_time, long_recipe_time),
+            ("ring_ripple", transition_time, long_recipe_time),
+            ("sunset_breathing", transition_time, long_recipe_time),
+            ("water_ripples", transition_time, long_recipe_time),
+            ("fade_cycle", transition_time, long_recipe_time),
+            ("fire_demo", transition_time, long_recipe_time),
+            ("lava_lamp", transition_time/2, long_recipe_time/3),
+            ("power_bars", transition_time, long_recipe_time),
+            ("pair_blender", transition_time, long_recipe_time),
+        ]
+        
+        await self._play_recipe_playlist(recipes, ComposerState.IDLE)
 
     async def _birthday_state_loop(self):
+        short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+        await self._load_recipe("music_pulse_rainbow", 1.0)
+        await self._sleep_while_in_state(short_recipe_time)
 
-            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
-            # Rainbow requires white bg color so use short transition
-            await self._load_recipe("rainbow", 0.0)
-            await self._sleep_while_in_state(short_recipe_time)
+        await self._load_recipe("music_pulse_colors", 1.0)
+        await self._sleep_while_in_state(short_recipe_time)
+        
+        # Auto-transition to single active
+        await self.set_state(ComposerState.SINGLE_ACTIVE)
 
+    async def _bad_songs_state_loop(self):
+        short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+        # TODO: implement bad songs playlist
+        await self._load_recipe("music_pulse_bad", transition_time)
+        await self._sleep_while_in_state(short_recipe_time)
+        await self.set_state(ComposerState.SINGLE_ACTIVE)
 
-
+    async def _starwars_state_loop(self):
+        short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+        await self._load_recipe("music_pulse_blue", transition_time)
+        await self._sleep_while_in_state(short_recipe_time)
+    
+        await self.set_state(ComposerState.SINGLE_ACTIVE)
     
     def _generate_edge_biased_color(self, color1, color2):
         """Generate edge-biased color between two colors"""
@@ -358,19 +387,15 @@ class LEDComposer(LEDComposerInterface):
     
     async def _single_active_state_loop(self):
         """Happy, energetic music-reactive patterns"""
-        while self.current_state == ComposerState.SINGLE_ACTIVE:
-            # Smart music spectrum - stays active until state changes
-
-            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
-
-            await self._load_recipe("smart_music_spectrum", transition_time)
-            await self._sleep_while_in_state(short_recipe_time)
-            
-            await self._load_recipe("music_pulse", transition_time)
-            await self._sleep_while_in_state(short_recipe_time)
-
-            await self._load_recipe("smart_spectrum_enhanced", transition_time)
-            await self._sleep_while_in_state(short_recipe_time)
+        short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+        
+        recipes = [
+            ("smart_music_spectrum", transition_time, short_recipe_time),
+            ("music_pulse", transition_time, short_recipe_time),
+            ("smart_spectrum_enhanced", transition_time, short_recipe_time),
+        ]
+        
+        await self._play_recipe_playlist(recipes, ComposerState.SINGLE_ACTIVE)
 
 
     async def _couple_feedback_loop(self):
@@ -381,18 +406,20 @@ class LEDComposer(LEDComposerInterface):
     
     async def _couple_active_state_loop(self):
         """Euphoric red/pink/purple patterns"""
-        while self.current_state == ComposerState.COUPLE_ACTIVE:
-            short_recipe_time, transition_time = self._get_short_transition_recipe_times()
-
-            await self._load_recipe("music_pulse_couple", transition_time)
-            await self._sleep_while_in_state(short_recipe_time)
-
-            # TODO use pink red compressor on the rest
+        short_recipe_time, transition_time = self._get_short_transition_recipe_times()
+        
+        recipes = [
+            ("pink_smart_music_spectrum", transition_time, short_recipe_time),
+            ("pink_smart_spectrum_enhanced", transition_time, short_recipe_time),
+            ("music_pulse_couple", transition_time, short_recipe_time),
+        ]
+        
+        await self._play_recipe_playlist(recipes, ComposerState.COUPLE_ACTIVE)
                 
     async def _advertise_loop(self):
         """High-energy attention-grabbing patterns for 3 seconds"""
         import random
-        scanner_recipes = ["scanner", "circle_scanner","complex_demo","glitch_matrix"]
+        scanner_recipes = ["scanner", "circle_scanner","complex_demo","glitch_matrix","rainbow_vortex_alternating"]
 
         while self.current_state == ComposerState.ADVERTISE:
             recipe = random.choice(scanner_recipes)
@@ -565,33 +592,43 @@ def create_led_composer(tree_config_path: str, force_simulation: bool = False, s
 
 
 async def demo():
-    """Demo function showing LED Composer usage"""
+    """Demo function showing LED Composer usage with CLI input"""
     composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
     
     try:
         await composer.start()
         
-        # Simulate user interactions
-        print("🧪 Testing state transitions...")
+        print("🧪 LED Composer CLI Test")
+        print("Commands: birthday, bad_songs, starwars, idle, single, couple, quit")
         
-        await asyncio.sleep(2)
-        await composer.set_state(ComposerState.SINGLE_FEEDBACK)
+        # Start input loop
+        import sys
+        loop = asyncio.get_event_loop()
         
-        await asyncio.sleep(5)  # Should auto-transition to SINGLE_ACTIVE
-        
-        await asyncio.sleep(3)
-        await composer.set_state(ComposerState.COUPLE_FEEDBACK)
-        
-        await asyncio.sleep(5)  # Should auto-transition to COUPLE_ACTIVE
-        
-        await asyncio.sleep(3)
-        await composer.set_manual_recipe("custom_pattern")
-        
-        await asyncio.sleep(5)
-        await composer.set_state(ComposerState.IDLE)
-        
-        # Let it run for a bit
-        await asyncio.sleep(10)
+        while True:
+            # Non-blocking input
+            await asyncio.sleep(0.1)
+            
+            # Check for input (simple approach)
+            if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                line = sys.stdin.readline().strip().lower()
+                
+                if line == 'quit':
+                    break
+                elif line == 'birthday':
+                    await composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BIRTHDAY)
+                elif line == 'bad_songs':
+                    await composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BAD_SONGS)
+                elif line == 'starwars':
+                    await composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.STARWARS)
+                elif line == 'idle':
+                    await composer.set_state(ComposerState.IDLE)
+                elif line == 'single':
+                    await composer.set_state(ComposerState.SINGLE_ACTIVE)
+                elif line == 'couple':
+                    await composer.set_state(ComposerState.COUPLE_ACTIVE)
+                else:
+                    print(f"Unknown command: {line}")
         
     except KeyboardInterrupt:
         print("\n🎨 LED Composer demo interrupted")

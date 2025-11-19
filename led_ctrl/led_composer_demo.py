@@ -126,6 +126,12 @@ class LEDComposerCLI:
                 await self.show_parameters()
             elif choice == "8":
                 await self.show_all_recipes()
+            elif choice == "birthday":
+                await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BIRTHDAY)
+            elif choice == "bad_songs":
+                await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BAD_SONGS)
+            elif choice == "starwars":
+                await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.STARWARS)
             elif choice.isdigit() and 9 <= int(choice) <= 16:
                 # Manual recipe selection from first 8
                 recipe_index = int(choice) - 9
@@ -136,7 +142,7 @@ class LEDComposerCLI:
                     print("❌ Recipe index out of range")
                     return
             else:
-                print("❌ Invalid choice. Please enter 0-16.")
+                print("❌ Invalid choice. Please enter 0-16, or: birthday, bad_songs, starwars")
                 return
             
             # Brief pause to see the change

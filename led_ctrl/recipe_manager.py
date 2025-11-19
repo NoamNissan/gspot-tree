@@ -7,7 +7,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Union
-from .pipeline_demo import BlackoutEffect
+from .pipeline_demo import BlackoutEffect, PinkCompressor
 
 # Parameter Range Classes for Smart Recipes
 @dataclass
@@ -317,6 +317,8 @@ class RecipeManager:
             effect = BarsEffect(self.controller.num_pixels)
         elif effect_type == "rotation":
             effect = RotationEffect()
+        elif effect_type == "pink_compressor":
+            effect = PinkCompressor()
         elif effect_type == "music_visualizer":
             # Get or create global audio provider
             if not AUDIO_AVAILABLE:
@@ -391,7 +393,6 @@ RECIPES = {
             EffectConfig("sparkle", {"density": 0.0025})
         ]
     ),
-    
 
     # TODO avoid white base color here
     "rainbow": Recipe(
@@ -476,6 +477,58 @@ RECIPES = {
             })
         ]
     ),
+
+    "pink_smart_spectrum_enhanced": Recipe(
+        name="Pink smart Spectrum Enhanced",
+        description="Randomized enhanced spectrum with variable bands",
+        base_colors=BaseColorConfig(
+            colors=ChoiceRange([
+                [Color(150, 0, 150), Color(0, 0, 150)],
+                [Color(20, 0, 40), Color(0, 20, 40)],    # Dark purple fade
+                [Color(40, 0, 0), Color(0, 0, 40)]       # Dark red-blue fade
+            ]),
+            mode=ChoiceRange([TransitionMode.STATIC, TransitionMode.FADE]),
+            speed=FloatRange(0.01, 0.8)
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {
+                "mode": "spectrum_enhanced",
+                "num_bands": ChoiceRange([3, 6, 9, 12]),
+                "sensitivity": FloatRange(0.8, 4.0),
+                "color_morph": ChoiceRange([True, False])            }),
+            EffectConfig("rotation", { # always put rotation effect last on the effects list
+                "speed": FloatRange(0.0, 9.0)
+            }),
+            EffectConfig("pink_compressor", {"reverse":True})
+        ]
+    ),
+
+    "pink_smart_music_spectrum": Recipe(
+        name="Smart Music Spectrum",
+        description="Randomized music visualization with parameter ranges",
+        base_colors=BaseColorConfig(
+            colors=ChoiceRange([
+                [Color(50, 50, 0)],
+                [Color(50, 0, 50), Color(0, 0, 50)],      # Purple fade
+                [Color(150, 0, 150), Color(0, 0, 150)],      # Purple fade
+                [Color(255, 0, 0), Color(0, 0, 255)]      # Red-blue fade
+            ]),
+            mode=ChoiceRange([TransitionMode.STATIC, TransitionMode.FADE]),
+            speed=FloatRange(0.01, 0.8)
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {
+                "mode": "spectrum",
+                "sensitivity": FloatRange(0.5, 3.0),
+                "num_bands": ChoiceRange([3, 6, 9]),
+                "color_morph": ChoiceRange([True, False])            }),
+            EffectConfig("rotation", { # always put rotation effect last on the effects list
+                "speed": FloatRange(0.0, 12.0)
+            }),
+            EffectConfig("pink_compressor", {"reverse":True})
+        ]
+    ),
+
 
     "pair_blender": Recipe(
         name="Pair Blender",
@@ -571,19 +624,7 @@ RECIPES = {
             EffectConfig("random_flash", {"frequency": 2.0})
         ]
     ),
-    
-    "music_spectrum_c": Recipe(
-        name="Music Spectrum Analyzer (Center-Out)",
-        description="Real-time audio spectrum visualization growing from center",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5})
-        ]
-    ),
-    
+
     "spectrum_enhanced": Recipe(
         name="Enhanced Spectrum Analyzer",
         description="Enhanced real-time audio spectrum visualization",
@@ -596,33 +637,9 @@ RECIPES = {
         ]
     ),
 
-    "spectrum_enhanced_c": Recipe(
-        name="Enhanced Spectrum Analyzer (Center-Out)",
-        description="Enhanced real-time audio spectrum visualization growing from center",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6})
-        ]
-    ),
-
     "spectrum_enhanced_9": Recipe(
         name="Enhanced Spectrum Analyzer (9-Band)",
         description="Enhanced real-time audio spectrum visualization with 9 bands",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 9})
-        ]
-    ),
-
-    "spectrum_enhanced_9_c": Recipe(
-        name="Enhanced Spectrum Analyzer (9-Band Center-Out)",
-        description="Enhanced 9-band spectrum visualization growing from center",
         base_colors=BaseColorConfig(
             colors=[Color(0, 0, 0)],  # Black base
             mode=TransitionMode.STATIC
@@ -644,17 +661,6 @@ RECIPES = {
         ]
     ),
 
-    "spectrum_enhanced_12_c": Recipe(
-        name="Enhanced Spectrum Analyzer (12-Band Center-Out)",
-        description="Enhanced 12-band spectrum visualization growing from center",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 12})
-        ]
-    ),
 
     "music_spectrum_morph": Recipe(
         name="Music Spectrum (Morphing Colors)",
@@ -668,17 +674,7 @@ RECIPES = {
         ]
     ),
 
-    "music_spectrum_c_morph": Recipe(
-        name="Music Spectrum Center-Out (Morphing Colors)",
-        description="3-band center-out spectrum with smooth color transitions",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum", "sensitivity": 1.5, "color_morph": True})
-        ]
-    ),
+
 
     "spectrum_enhanced_morph": Recipe(
         name="Enhanced Spectrum (Morphing Colors)",
@@ -692,17 +688,6 @@ RECIPES = {
         ]
     ),
 
-    "spectrum_enhanced_c_morph": Recipe(
-        name="Enhanced Spectrum Center-Out (Morphing Colors)",
-        description="6-band center-out spectrum with smooth color transitions",
-        base_colors=BaseColorConfig(
-            colors=[Color(0, 0, 0)],  # Black base
-            mode=TransitionMode.STATIC
-        ),
-        effects=[
-            EffectConfig("music_visualizer", {"mode": "spectrum_enhanced", "sensitivity": 1.5, "num_bands": 6, "color_morph": True})
-        ]
-    ),
 
     "spectrum_enhanced_9_morph": Recipe(
         name="Enhanced Spectrum 9-Band (Morphing Colors)",
@@ -755,6 +740,78 @@ RECIPES = {
             EffectConfig("random_flash", {"frequency": 2.0, "flash_color": Color(0, 255, 255)})
         ]
     ),
+
+    "music_pulse_rainbow": Recipe(
+        name="Music Pulse",
+        description="Colors pulse with music",
+        base_colors=BaseColorConfig(
+            colors=[Color(255, 0, 255), Color(0, 0, 255)],
+            mode=TransitionMode.FADE,
+            speed=0.2
+        ),
+        effects=[
+            EffectConfig("rainbow", {"speed": 0.2}),
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("sparkle", {"density": 0.005, "period": 3, "duration": 0.15})
+        ]
+    ),
+
+    "music_pulse_colors": Recipe(
+        name="Music Pulse",
+        description="Colors pulse with music",
+        base_colors=BaseColorConfig(
+            colors=[
+                Color(255, 0, 0),      # Red
+                Color(0, 255, 0),      # Green
+                Color(0, 0, 255),      # Blue
+                Color(255, 255, 0),    # Yellow
+                Color(255, 0, 255),    # Magenta
+                Color(0, 255, 255),    # Cyan
+                Color(255, 255, 255),  # White
+                Color(255, 128, 0)     # Orange
+            ],
+            mode=TransitionMode.FADE,
+            speed=FloatRange(0.03,0.25)
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("random_flash", {"frequency": 2.0, "flash_color": Color(0, 255, 255)})
+        ]
+    ),
+
+    "music_pulse_bad": Recipe(
+        name="Music Pulse",
+        description="Colors pulse with music",
+        base_colors=BaseColorConfig(
+            colors=[
+                Color(50, 50, 50),     # Dark gray
+                Color(50, 50, 0),      # Dark yellow
+                Color(0, 50, 0)        # Dark green
+            ],
+            mode=TransitionMode.FADE,
+            speed=FloatRange(0.03, 0.25)
+        ),
+        effects=[
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("sparkle", {"density": 0.055, "period": 10, "duration": 0.15})
+        ]
+    ),
+
+    "music_pulse_blue": Recipe(
+        name="Music Pulse",
+        description="Colors pulse with music",
+        base_colors=BaseColorConfig(
+            colors=[Color(0, 0, 120), Color(0, 0, 150)],
+            mode=TransitionMode.FADE,
+            speed=FloatRange(0.03, 0.25)
+        ),
+        effects=[
+            EffectConfig("ring_ripple", {"speed": 1.0, "color": Color(0, 255, 255)}),
+            EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("sparkle", {"density": 0.055, "period": 15, "duration": 0.15})
+        ]
+    ),
+    
     
     "ring_amplitude": Recipe(
         name="Ring Amplitude",
@@ -938,7 +995,8 @@ RECIPES = {
             speed=0.2
         ),
         effects=[
-            EffectConfig("water", {"speed": 2, "ripples": 2})
+            EffectConfig("water", {"speed": 2, "ripples": 2}),
+            EffectConfig("sparkle", {"density": 0.055, "period": 19, "duration": 0.15})
         ]
     ),
     
@@ -1159,7 +1217,7 @@ RECIPES = {
             mode=TransitionMode.STATIC
         ),
         effects=[
-            EffectConfig("rainbow_vortex", {"base_speed": 21, "speed_ratio": 0.9, "direction": "cw", "alternating": True})
+            EffectConfig("rainbow_vortex", {"base_speed": 1.5, "speed_ratio": 0.98, "direction": "cw", "alternating": True})
         ]
     ),
     

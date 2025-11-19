@@ -623,10 +623,30 @@ class SparkleEffect(Effect):
         super().__init__(effect_id)
         self.parameters = {
             'density': 0.05,  # 5% of pixels sparkle
-            'brightness': 1.0
+            'brightness': 1.0,
+            'period': 0.0,  # Seconds between sparkle bursts (0 = always sparkle)
+            'duration': 0.0  # Seconds to sparkle after period (0 = single frame)
         }
+        self.last_sparkle_time = 0.0
     
     def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        period = self.parameters.get('period', 0.0)
+        duration = self.parameters.get('duration', 0.0)
+        
+        if period > 0:
+            time_since_last = elapsed - self.last_sparkle_time
+            
+            # Check if we're in sparkle burst window
+            if time_since_last < duration:
+                # Currently sparkling
+                pass
+            elif time_since_last < period:
+                # Waiting for next burst
+                return colors
+            else:
+                # Start new burst
+                self.last_sparkle_time = elapsed
+        
         result = colors.copy()
         
         # Add random sparkles
@@ -1029,7 +1049,7 @@ class PinkCompressor(Effect):
 
     def _apply_effect(self, colors: Colors, elapsed: float) -> List[Color]:
         import colorsys
-        
+
         result = []
         for c in colors:
             #r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
