@@ -147,8 +147,14 @@ class Effect:
         return colors
     
     def update_parameters(self, parameters: Dict[str, Any]):
-        """Update effect parameters"""
-        self.parameters.update(parameters)
+        """Update effect parameters, resolving any Range objects"""
+        from .recipe_manager import FloatRange, ChoiceRange
+        resolved = {}
+        for key, value in parameters.items():
+            while isinstance(value, (FloatRange, ChoiceRange)):
+                value = value.resolve()
+            resolved[key] = value
+        self.parameters.update(resolved)
 
 class BreathingEffect(Effect):
     """Breathing intensity effect"""
