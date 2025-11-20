@@ -432,7 +432,7 @@ class LEDComposer(LEDComposerInterface):
 
         while self.current_state == ComposerState.ADVERTISE:
             recipe = random.choice(scanner_recipes)
-            await self._load_recipe(recipe, transition_time=5)
+            await self._load_recipe(recipe, transition_time=2)
             await self._sleep_while_in_state(10)
 
 

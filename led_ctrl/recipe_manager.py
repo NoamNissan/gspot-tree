@@ -257,6 +257,9 @@ class RecipeManager:
         elif effect_type == "rainbow_vortex":
             from .pipeline_demo import RainbowVortexEffect
             effect = RainbowVortexEffect(self.tree_structure)
+        elif effect_type == "luminosity_scanner":
+            from .pipeline_demo import LuminosityScannerEffect
+            effect = LuminosityScannerEffect()
         elif effect_type == "rainbow_branches_skewed":
             from .pipeline_demo import RainbowBranchesSkewedEffect
             effect = RainbowBranchesSkewedEffect(self.tree_structure)
@@ -775,6 +778,12 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("luminosity_scanner", {
+                "speed": FloatRange(0.01,0.3), 
+                "width": 8, 
+                "scan_mode": ChoiceRange(["bounce", "wrap"]),
+                "intensity": FloatRange(0.2,1.0)  # 50% brightness boost
+            }),
             EffectConfig("random_flash", {"frequency": 2.0, "flash_color": Color(0, 255, 255)})
         ]
     ),
@@ -1057,7 +1066,13 @@ RECIPES = {
             speed=0.1
         ),
         effects=[
-            EffectConfig("fade", {"speed": 1.0})
+            EffectConfig("fade", {"speed": 1.0}),
+            EffectConfig("luminosity_scanner", {
+                "speed": FloatRange(0.01,0.3), 
+                "width": 8, 
+                "scan_mode": ChoiceRange(["bounce", "wrap"]),
+                "intensity": FloatRange(0.2,1.0)  # 50% brightness boost
+            })
         ]
     ),
     
@@ -1221,6 +1236,7 @@ RECIPES = {
         ]
     ),
     
+
     "rainbow_branches_skewed": Recipe(
         name="Rainbow Branches Skewed",
         description="Rainbow colors through skewed branch groupings",

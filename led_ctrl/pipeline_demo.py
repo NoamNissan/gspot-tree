@@ -1490,6 +1490,61 @@ class RingColorsEffect(Effect):
         return result
 
 
+class LuminosityScannerEffect(Effect):
+    """Moving scanner beam luminosity mask (Cylon eye style)"""
+    
+    def __init__(self, speed: float = 2.0, width: int = 10, scan_mode: str = "bounce", intensity: float = 1.0):
+        super().__init__()
+        self.parameters = {
+            'speed': speed,
+            'width': width,
+            'scan_mode': scan_mode,  # "bounce" or "wrap"
+            'intensity': intensity  # Brightness multiplier (0.5 = 50% brighter, 1.0 = 100% brighter)
+        }
+        self.blend_mode = BlendMode.REPLACE
+        
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        speed = self.parameters['speed']
+        width = self.parameters['width']
+        scan_mode = self.parameters['scan_mode']
+        intensity = self.parameters['intensity']
+        
+        num_pixels = len(colors)
+        
+        # Calculate scanner position
+        cycle_time = 2.0 / speed
+        phase = (elapsed % cycle_time) / cycle_time
+        
+        if scan_mode == "bounce":
+            # Bounce: 0→1→0 (classic Cylon eye)
+            if phase > 0.5:
+                phase = 1.0 - phase
+            scanner_pos = phase * 2 * (num_pixels - 1)
+        else:  # wrap
+            # Wrap: 0→1→0→1 (continuous sweep)
+            scanner_pos = phase * (num_pixels - 1)
+        
+        # Generate scanner mask (1.0 at beam, 0.0 elsewhere)
+        positions = np.arange(num_pixels, dtype=np.float32)
+        distances = np.abs(positions - scanner_pos)
+        mask = np.maximum(0, 1 - distances / width)
+        
+        # Brighten pixels in beam, leave others unchanged
+        result = colors.copy()
+        
+        for i in range(num_pixels):
+            if mask[i] > 0:
+                # Brighten by multiplying (intensity controls max brightness boost)
+                brightness = 1.0 + (mask[i] * intensity)
+                result[i] = Color(
+                    min(255, int(colors[i].r * brightness)),
+                    min(255, int(colors[i].g * brightness)),
+                    min(255, int(colors[i].b * brightness))
+                )
+        
+        return result
+
+
 class SpectrumEffect(Effect):
     """LedFx-style spectrum analyzer effect"""
     
