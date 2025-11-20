@@ -42,6 +42,13 @@
             padding-bottom: 10px;
         }
         
+        h3 {
+            color: #667eea;
+            margin: 20px 0 10px 0;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+        
         .status {
             text-align: center;
             padding: 15px;
@@ -171,7 +178,7 @@
             background: #5a6268;
         }
         
-        .strobe-controls {
+        .strobe-controls, .crawl-controls, .range-controls, .tree-controls {
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
@@ -179,6 +186,68 @@
             gap: 20px;
             align-items: center;
             flex-wrap: wrap;
+        }
+        
+        .crawl-controls {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+        
+        .range-controls {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+        
+        .tree-controls {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+        
+        .crawl-btn, .range-btn, .tree-btn {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .crawl-btn {
+            background: #667eea;
+            color: white;
+        }
+        
+        .crawl-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .range-btn {
+            background: #28a745;
+            color: white;
+        }
+        
+        .range-btn:hover {
+            background: #218838;
+        }
+        
+        .tree-btn {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .tree-btn:hover {
+            background: #e0a800;
+        }
+        
+        #crawl-blink-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .control-group small {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 2px;
         }
         
         .control-group {
@@ -262,7 +331,68 @@
                 <input type="number" id="pixels" value="60" min="1" max="300">
             </div>
         </div>
-        
+
+        <h2>🐛 LED Crawl</h2>
+        <div class="crawl-controls">
+            <div class="control-group">
+                <label for="crawl-blink">Blink Duration (seconds):</label>
+                <input type="range" id="crawl-blink" min="0.5" max="5.0" step="0.1" value="2.0">
+                <span id="crawl-blink-value">2.0s</span>
+            </div>
+            <button class="crawl-btn" onclick="startCrawl()">🐛 Start LED Crawl</button>
+        </div>
+
+        <h2>💡 LED Range Control</h2>
+        <div class="range-controls">
+            <div class="control-group">
+                <label for="led-range">LED Range:</label>
+                <input type="text" id="led-range" placeholder="0 or 0,4,10 or 0-5 or 1,3,5-8">
+                <small>Examples: "0" (single), "0,4,10" (list), "0-5" (range), "1,3,5-8" (mixed)</small>
+            </div>
+            <button class="range-btn" onclick="setLedRange()">💡 Set LED Range</button>
+        </div>
+
+        <h2>🌲 Tree Structure</h2>
+        <div class="tree-controls">
+            <div class="control-group">
+                <label for="ring-select">Ring (0-4):</label>
+                <select id="ring-select">
+                    <option value="0">Ring 0</option>
+                    <option value="1">Ring 1</option>
+                    <option value="2">Ring 2</option>
+                    <option value="3">Ring 3</option>
+                    <option value="4">Ring 4</option>
+                </select>
+                <button class="tree-btn" onclick="setRing()">💍 Set Ring</button>
+            </div>
+            <div class="control-group">
+                <label for="branch-select">Branch (0-19):</label>
+                <select id="branch-select">
+                    <option value="0">Branch 0</option>
+                    <option value="1">Branch 1</option>
+                    <option value="2">Branch 2</option>
+                    <option value="3">Branch 3</option>
+                    <option value="4">Branch 4</option>
+                    <option value="5">Branch 5</option>
+                    <option value="6">Branch 6</option>
+                    <option value="7">Branch 7</option>
+                    <option value="8">Branch 8</option>
+                    <option value="9">Branch 9</option>
+                    <option value="10">Branch 10</option>
+                    <option value="11">Branch 11</option>
+                    <option value="12">Branch 12</option>
+                    <option value="13">Branch 13</option>
+                    <option value="14">Branch 14</option>
+                    <option value="15">Branch 15</option>
+                    <option value="16">Branch 16</option>
+                    <option value="17">Branch 17</option>
+                    <option value="18">Branch 18</option>
+                    <option value="19">Branch 19</option>
+                </select>
+                <button class="tree-btn" onclick="setBranch()">🌿 Set Branch</button>
+            </div>
+        </div>
+
         <h2>🌲 Tree Effects</h2>
         
         <h3>💍 Ring Effects</h3>
@@ -324,17 +454,30 @@
         </div>
         
         <h2>🎵 Music</h2>
-        {% if songs %}
-        <div class="song-grid">
-            {% for song in songs %}
-            <div class="song-card" data-song="{{ song.filename }}">
-                <div class="song-name">{{ song.name }}</div>
+        
+        <div class="crawl-controls">
+            <div class="control-group">
+                <label for="hdmi-volume">🔊 HDMI Volume:</label>
+                <input type="range" id="hdmi-volume" min="0" max="100" step="5" value="100">
+                <span id="hdmi-volume-value">100%</span>
+                <small>Loopback stays at 100%</small>
             </div>
-            {% endfor %}
         </div>
+        
+        {% if songs and songs|length > 0 %}
+            {% for folder, folder_songs in songs.items() %}
+                <h3>📁 {{ folder if folder else "Root" }}</h3>
+                <div class="song-grid">
+                    {% for song in folder_songs %}
+                    <div class="song-card" data-song="{{ song.filename }}">
+                        <div class="song-name">{{ song.name }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
         {% else %}
         <div class="no-songs">
-            No songs found in /home/tao/repo/gspot-tree/songs/<br>
+            No songs found in ./songs/<br>
             Add .mp3, .wav, .m4a, or .flac files to play music
         </div>
         {% endif %}
@@ -509,6 +652,150 @@
                     container.classList.remove('loading');
                 });
         }
+        
+        // HDMI Volume control
+        const hdmiVolumeSlider = document.getElementById('hdmi-volume');
+        const hdmiVolumeValue = document.getElementById('hdmi-volume-value');
+        
+        hdmiVolumeSlider.addEventListener('input', function() {
+            hdmiVolumeValue.textContent = this.value + '%';
+        });
+        
+        hdmiVolumeSlider.addEventListener('change', function() {
+            fetch('/volume', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({volume: this.value})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    alert('Failed to set volume: ' + data.message);
+                }
+            })
+            .catch(error => alert('Error: ' + error));
+        });
+        
+        // Load current volume on page load
+        fetch('/volume')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    hdmiVolumeSlider.value = data.volume;
+                    hdmiVolumeValue.textContent = data.volume + '%';
+                }
+            });
+
+        
+        // Start LED crawl
+        function startCrawl() {
+            const blinkTime = document.getElementById('crawl-blink').value;
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            container.classList.add('loading');
+            
+            fetch(`/crawl?blink_time=${blinkTime}&pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to start crawl: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Set LED range
+        function setLedRange() {
+            const range = document.getElementById('led-range').value.trim();
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            if (!range) {
+                alert('Please enter a LED range');
+                return;
+            }
+            
+            container.classList.add('loading');
+            
+            fetch(`/set_led_range?range=${encodeURIComponent(range)}&pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to set LED range: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Set ring
+        function setRing() {
+            const ringId = document.getElementById('ring-select').value;
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            container.classList.add('loading');
+            
+            fetch(`/set_ring/${ringId}?pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to set ring: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Set branch
+        function setBranch() {
+            const branchId = document.getElementById('branch-select').value;
+            const pixels = document.getElementById('pixels').value;
+            const container = document.querySelector('.container');
+            
+            container.classList.add('loading');
+            
+            fetch(`/set_branch/${branchId}?pixels=${pixels}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus();
+                    } else {
+                        alert('Failed to set branch: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        // Update crawl blink value display
+        document.getElementById('crawl-blink').addEventListener('input', function() {
+            document.getElementById('crawl-blink-value').textContent = this.value + 's';
+        });
         
         // Add click handlers to recipe cards
         document.querySelectorAll('.recipe-card').forEach(card => {

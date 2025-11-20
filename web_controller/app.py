@@ -11,6 +11,8 @@ import os
 import signal
 import glob
 
+CWD="."
+
 app = Flask(__name__)
 
 # Available recipes organized by category
@@ -68,22 +70,39 @@ music_process = None
 current_song = None
 
 def get_songs():
-    """Get list of available songs"""
-    songs_dir = "/home/tao/repo/gspot-tree/songs"
+    """Get list of available songs organized by folder"""
+    songs_dir = f"{CWD}/../songs"
+
     if not os.path.exists(songs_dir):
-        return []
+        return {}
     
-    song_files = []
-    for ext in ['*.mp3', '*.wav', '*.m4a', '*.flac']:
-        song_files.extend(glob.glob(os.path.join(songs_dir, ext)))
+    songs_by_folder = {}
     
-    songs = []
-    for filepath in sorted(song_files):
-        filename = os.path.basename(filepath)
-        name = os.path.splitext(filename)[0]
-        songs.append({"filename": filename, "name": name})
+    # Walk through all subdirectories
+    for root, dirs, files in os.walk(songs_dir):
+        # Get relative path from songs_dir
+        rel_path = os.path.relpath(root, songs_dir)
+        if rel_path == '.':
+            rel_path = ''  # Root folder
+        
+        # Find all audio files in this directory
+        audio_files = []
+        for file in files:
+            if file.lower().endswith(('.mp3', '.wav', '.m4a', '.flac')):
+                audio_files.append(file)
+        
+        # Only add folder if it has audio files
+        if audio_files:
+            songs = []
+            for filename in sorted(audio_files):
+                name = os.path.splitext(filename)[0]
+                # Store relative path from songs/ directory
+                rel_file_path = os.path.join(rel_path, filename) if rel_path else filename
+                songs.append({"filename": rel_file_path, "name": name})
+            
+            songs_by_folder[rel_path] = songs
     
-    return songs
+    return songs_by_folder
 
 def kill_current_process():
     """Kill the current LED orchestrator process"""
@@ -123,11 +142,12 @@ def run_recipe(recipe_id, pixels=60):
         "--pixels", str(pixels),
         "--tree-config", "../led_ctrl/tree_config.yaml"
     ]
-    
+   
     try:
+        print("cmd",cmd)
         current_process = subprocess.Popen(
             cmd, 
-            cwd="/home/tao/repo/gspot-tree/web_controller",
+            cwd=CWD,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -155,9 +175,10 @@ def run_recipe_with_params(recipe_id, pixels, freq, color):
     ]
     
     try:
+        print("cmd",cmd)
         current_process = subprocess.Popen(
             cmd, 
-            cwd="/home/tao/repo/gspot-tree/web_controller",
+            cwd=CWD,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -174,7 +195,7 @@ def play_song(filename):
     # Kill any existing music
     kill_music_process()
     
-    songs_dir = "/home/tao/repo/gspot-tree/songs"
+    songs_dir = f"{CWD}/../songs"
     filepath = os.path.join(songs_dir, filename)
     
     if not os.path.exists(filepath):
@@ -242,9 +263,10 @@ def stop_recipe():
             "--clear-all",
             "--pixels", str(pixels)
         ]
+        print("cmd",clear_cmd)
         clear_process = subprocess.Popen(
             clear_cmd,
-            cwd="/home/tao/repo/gspot-tree/web_controller",
+            cwd=CWD,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -255,7 +277,7 @@ def stop_recipe():
     current_recipe = None
     return jsonify({"status": "success", "message": "Stopped and cleared"})
 
-@app.route('/play/<filename>')
+@app.route('/play/<path:filename>')
 def play_music(filename):
     """Play a specific song"""
     if play_song(filename):
@@ -282,6 +304,163 @@ def start_strobe():
     else:
         return jsonify({"status": "error", "message": "Failed to start strobe"}), 500
 
+@app.route('/crawl')
+def start_crawl():
+    """Start LED crawl mode"""
+    global current_process, current_recipe
+    
+    pixels = request.args.get('pixels', 60, type=int)
+    blink_time = request.args.get('blink_time', 2.0, type=float)
+    
+    kill_current_process()
+    
+    cmd = [
+        "python3", 
+        "../led_ctrl/led_orchestrator.py", 
+        "--led-crawl",
+        "--pixels", str(pixels),
+        "--crawl-blink-time", str(blink_time),
+        "--tree-config", "../led_ctrl/tree_config.yaml"
+    ]
+    
+    try:
+        print("cmd",cmd)
+        current_process = subprocess.Popen(
+            cmd, 
+            cwd=CWD,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT
+        )
+        # Print first few lines of output
+        for line in current_process.stdout:
+            print("Process output:", line.decode().strip())
+
+        current_recipe = f"LED Crawl ({blink_time}s blink)"
+        return jsonify({"status": "success", "mode": "crawl", "blink_time": blink_time})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/set_led_range')
+def set_led_range():
+    """Set specific LED range"""
+    global current_process, current_recipe
+    
+    pixels = request.args.get('pixels', 60, type=int)
+    led_range = request.args.get('range', '')
+    
+    if not led_range:
+        return jsonify({"status": "error", "message": "Range parameter required"}), 400
+    
+    kill_current_process()
+    
+    cmd = [
+        "python3", 
+        "../led_ctrl/led_orchestrator.py", 
+        "--set-led-range", led_range,
+        "--pixels", str(pixels),
+        "--tree-config", "../led_ctrl/tree_config.yaml"
+    ]
+    
+    try:
+        print("cmd",cmd)
+        current_process = subprocess.Popen(
+            cmd, 
+            cwd=CWD,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        current_recipe = f"LED Range: {led_range}"
+        return jsonify({"status": "success", "mode": "range", "range": led_range})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/set_ring/<int:ring_id>')
+def set_ring(ring_id):
+    """Set specific ring"""
+    global current_process, current_recipe
+    
+    pixels = request.args.get('pixels', 60, type=int)
+    
+    kill_current_process()
+    
+    cmd = [
+        "python3", 
+        "../led_ctrl/led_orchestrator.py", 
+        "--set-ring", str(ring_id),
+        "--pixels", str(pixels),
+        "--tree-config", "../led_ctrl/tree_config.yaml"
+    ]
+    
+    try:
+        print("cmd",cmd)
+        current_process = subprocess.Popen(
+            cmd, 
+            cwd=CWD,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        current_recipe = f"Ring {ring_id}"
+        return jsonify({"status": "success", "mode": "ring", "ring": ring_id})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/set_branch/<int:branch_id>')
+def set_branch(branch_id):
+    """Set specific branch"""
+    global current_process, current_recipe
+    
+    pixels = request.args.get('pixels', 60, type=int)
+    
+    kill_current_process()
+    
+    cmd = [
+        "python3", 
+        "../led_ctrl/led_orchestrator.py", 
+        "--set-branch", str(branch_id),
+        "--pixels", str(pixels),
+        "--tree-config", "../led_ctrl/tree_config.yaml"
+    ]
+    
+    try:
+        current_process = subprocess.Popen(
+            cmd, 
+            cwd=CWD,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        current_recipe = f"Branch {branch_id}"
+        return jsonify({"status": "success", "mode": "branch", "branch": branch_id})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/volume', methods=['POST'])
+def set_volume():
+    """Set Master volume (0-100)"""
+    try:
+        volume = request.json.get('volume', 50)
+        volume = max(0, min(100, int(volume)))  # Clamp 0-100
+        
+        # Set Master volume using amixer
+        subprocess.run(['amixer', 'set', 'Master', f'{volume}%'], check=True)
+        
+        return jsonify({"status": "success", "volume": volume})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/volume', methods=['GET'])
+def get_volume():
+    """Get current Master volume"""
+    try:
+        result = subprocess.run(['amixer', 'get', 'Master'], capture_output=True, text=True)
+        # Parse volume from output like: [50%]
+        import re
+        match = re.search(r'\[(\d+)%\]', result.stdout)
+        volume = int(match.group(1)) if match else 50
+        
+        return jsonify({"status": "success", "volume": volume})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e), "volume": 50}), 200
+
 @app.route('/status')
 def get_status():
     """Get current status"""
@@ -298,11 +477,21 @@ def get_status():
     })
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='LED Web Controller')
+    parser.add_argument('--cwd', type=str, default='.', help='Working directory for spawned processes (default: current directory)')
+    parser.add_argument('--port', type=int, default=5000, help='Port to run server on (default: 5000)')
+    args = parser.parse_args()
+    
+    # Override CWD if provided
+    CWD = args.cwd
+    
     print("🌐 LED Web Controller starting...")
-    print("📱 Access from your phone: http://<raspberry-pi-ip>:5000")
+    print(f"📁 Working directory: {CWD}")
+    print(f"📱 Access from your phone: http://<raspberry-pi-ip>:{args.port}")
     
     try:
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        app.run(host='0.0.0.0', port=args.port, debug=False)
     except KeyboardInterrupt:
         print("\n🛑 Shutting down...")
         kill_current_process()
