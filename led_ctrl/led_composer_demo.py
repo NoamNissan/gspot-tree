@@ -11,10 +11,11 @@ from .led_composer import create_led_composer, ComposerState
 
 
 class LEDComposerCLI:
-    def __init__(self):
+    def __init__(self, force_simulation=False):
         self.composer = None
         self.running = False
         self.gui_root = None  # Reference to GUI root window for closing
+        self.force_simulation = force_simulation
     
     async def start(self):
         """Start the LED composer and CLI"""
@@ -23,7 +24,7 @@ class LEDComposerCLI:
         
         # Initialize composer if not already done
         if not self.composer:
-            self.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
+            self.composer = create_led_composer("tree_config.yaml", force_simulation=self.force_simulation, separate_process=False)
         
         # Start composer if not already running
         # Check if composer has a running flag (for LEDComposer class)
@@ -238,13 +239,20 @@ async def main_async(cli: LEDComposerCLI):
 
 def main():
     """Main entry point that handles GUI integration"""
-    print("🖥️ Starting LED Composer Demo in simulation mode with GUI")
+    import argparse
+    parser = argparse.ArgumentParser(description='LED Composer Demo')
+    parser.add_argument('--simulation', action='store_true', help='Use simulation mode (GUI)')
+    args = parser.parse_args()
+    
+    force_simulation = args.simulation
+    mode_text = "simulation mode with GUI" if force_simulation else "real hardware mode"
+    print(f"🖥️ Starting LED Composer Demo in {mode_text}")
     
     # Create CLI instance
-    cli = LEDComposerCLI()
+    cli = LEDComposerCLI(force_simulation=force_simulation)
     
     # Initialize composer to get controller (GUI is created during initialization)
-    cli.composer = create_led_composer("tree_config.yaml", force_simulation=True, separate_process=False)
+    cli.composer = create_led_composer("tree_config.yaml", force_simulation=force_simulation, separate_process=False)
     
     # Get the GUI instance from the controller (no need to start yet)
     gui_instance = None

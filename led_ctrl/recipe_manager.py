@@ -742,7 +742,7 @@ RECIPES = {
     ),
 
     "music_pulse_rainbow": Recipe(
-        name="Music Pulse",
+        name="Music Pulse rainbow",
         description="Colors pulse with music",
         base_colors=BaseColorConfig(
             colors=[Color(255, 0, 255), Color(0, 0, 255)],
@@ -757,7 +757,7 @@ RECIPES = {
     ),
 
     "music_pulse_colors": Recipe(
-        name="Music Pulse",
+        name="Music Pulse colors",
         description="Colors pulse with music",
         base_colors=BaseColorConfig(
             colors=[
@@ -780,7 +780,7 @@ RECIPES = {
     ),
 
     "music_pulse_bad": Recipe(
-        name="Music Pulse",
+        name="Music Pulse bad",
         description="Colors pulse with music",
         base_colors=BaseColorConfig(
             colors=[
@@ -798,7 +798,7 @@ RECIPES = {
     ),
 
     "music_pulse_blue": Recipe(
-        name="Music Pulse",
+        name="Music Pulse blue",
         description="Colors pulse with music",
         base_colors=BaseColorConfig(
             colors=[Color(0, 0, 120), Color(0, 0, 150)],
