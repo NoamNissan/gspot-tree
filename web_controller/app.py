@@ -15,53 +15,33 @@ CWD="."
 
 app = Flask(__name__)
 
-# Available recipes organized by category
-RING_RECIPES = [
-    {"id": "ring_ripple", "name": "Ring Ripple", "description": "Ripple effect through tree rings"}
-]
+# Dynamically load recipes from recipe_manager
+def get_available_recipes():
+    """Get recipes organized by category from recipe_manager"""
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(CWD, '..'))
+    
+    from led_ctrl.recipe_manager import RECIPES
+    
+    ring_recipes = []
+    branch_recipes = []
+    general_recipes = []
+    
+    for recipe_id, recipe in RECIPES.items():
+        recipe_dict = {"id": recipe_id, "name": recipe.name, "description": recipe.description}
+        
+        # Categorize by name patterns
+        if "ring" in recipe_id.lower():
+            ring_recipes.append(recipe_dict)
+        elif "branch" in recipe_id.lower():
+            branch_recipes.append(recipe_dict)
+        else:
+            general_recipes.append(recipe_dict)
+    
+    return ring_recipes, branch_recipes, general_recipes
 
-BRANCH_RECIPES = [
-    {"id": "branch_sweep", "name": "Branch Sweep", "description": "Sweep effect around tree branches"}
-]
-
-GENERAL_RECIPES = [
-    {"id": "complex_demo", "name": "Complex Demo", "description": "Multi-effect demonstration"},
-    {"id": "sunset_breathing", "name": "Sunset Breathing", "description": "Calm red-pink breathing"},
-    {"id": "rainbow_wave", "name": "Rainbow Wave", "description": "Rainbow with wave effects"},
-    {"id": "rainbow", "name": "Pure Rainbow", "description": "Classic rainbow cycling"},
-    {"id": "music_spectrum", "name": "Music Spectrum", "description": "3-band spectrum (bottom-up)"},
-    {"id": "music_spectrum_c", "name": "Music Spectrum Center", "description": "3-band spectrum (center-out)"},
-    {"id": "spectrum_enhanced", "name": "Enhanced Spectrum", "description": "6-band spectrum (bottom-up)"},
-    {"id": "spectrum_enhanced_c", "name": "Enhanced Spectrum Center", "description": "6-band spectrum (center-out)"},
-    {"id": "spectrum_enhanced_9", "name": "Enhanced Spectrum 9-Band", "description": "9-band spectrum"},
-    {"id": "spectrum_enhanced_9_c", "name": "Enhanced Spectrum 9-Band Center", "description": "9-band spectrum (center-out)"},
-    {"id": "spectrum_enhanced_12", "name": "Enhanced Spectrum 12-Band", "description": "12-band spectrum"},
-    {"id": "spectrum_enhanced_12_c", "name": "Enhanced Spectrum 12-Band Center", "description": "12-band spectrum (center-out)"},
-    {"id": "music_spectrum_morph", "name": "Music Spectrum Morphing", "description": "3-band spectrum with color morphing"},
-    {"id": "music_spectrum_c_morph", "name": "Music Spectrum Center Morphing", "description": "3-band center spectrum with color morphing"},
-    {"id": "spectrum_enhanced_morph", "name": "Enhanced Spectrum Morphing", "description": "6-band spectrum with color morphing"},
-    {"id": "spectrum_enhanced_c_morph", "name": "Enhanced Spectrum Center Morphing", "description": "6-band center spectrum with color morphing"},
-    {"id": "spectrum_enhanced_9_morph", "name": "Enhanced Spectrum 9-Band Morphing", "description": "9-band spectrum with color morphing"},
-    {"id": "spectrum_enhanced_12_morph", "name": "Enhanced Spectrum 12-Band Morphing", "description": "12-band spectrum with color morphing"},
-    {"id": "music_pulse", "name": "Music Pulse", "description": "Colors pulse with music"},
-    {"id": "spectrum_analyzer", "name": "Spectrum Analyzer", "description": "LedFx-style spectrum bars"},
-    {"id": "energy_pulse", "name": "Energy Pulse", "description": "Energy-based color changes"},
-    {"id": "wavelength_flow", "name": "Wavelength Flow", "description": "Traveling wavelength effect"},
-    {"id": "rainbow_scroll", "name": "Rainbow Scroll", "description": "Scrolling rainbow pattern"},
-    {"id": "frequency_bars", "name": "Frequency Bars", "description": "Audio frequency bar visualization"},
-    {"id": "lava_lamp", "name": "Lava Lamp", "description": "Smooth flowing lava lamp effect"},
-    {"id": "fire_demo", "name": "Fire Demo", "description": "Flickering fire effect"},
-    {"id": "circle_scanner", "name": "Circle Scanner", "description": "Circular scanner effect"},
-    {"id": "scanner", "name": "Scanner", "description": "Cylon eye scanner effect"},
-    {"id": "digital_rain", "name": "Digital Rain", "description": "Matrix-style digital rain"},
-    {"id": "melt_flow", "name": "Melt Flow", "description": "Melting color flow effect"},
-    {"id": "water_ripples", "name": "Water Ripples", "description": "Calm water ripple effect"},
-    {"id": "marching_ants", "name": "Marching Ants", "description": "Classic marching ants pattern"},
-    {"id": "glitch_matrix", "name": "Glitch Matrix", "description": "Digital glitch corruption"},
-    {"id": "power_bars", "name": "Power Bars", "description": "Power level visualization"},
-    {"id": "fade_cycle", "name": "Fade Cycle", "description": "Smooth color fade cycling"},
-    {"id": "color_blocks", "name": "Color Blocks", "description": "Moving color blocks"},
-]
+RING_RECIPES, BRANCH_RECIPES, GENERAL_RECIPES = get_available_recipes()
 
 # Global process tracking
 current_process = None
