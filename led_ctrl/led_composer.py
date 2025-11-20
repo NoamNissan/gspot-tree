@@ -30,6 +30,7 @@ class ComposerState(Enum):
     ADVERTISE = "advertise"
     MANUAL = "manual"
     NOT_ACTIVE = "not_active"
+    YELLOW_FEEDBACK = "yellow_feedback"
 
     # Non basic states
     BIRTHDAY = "birthday"
@@ -214,6 +215,8 @@ class LEDComposer(LEDComposerInterface):
                 await self._idle_state_loop()
             elif self.current_state == ComposerState.SINGLE_FEEDBACK:
                 await self._single_feedback_loop()
+            elif self.current_state == ComposerState.YELLOW_FEEDBACK:
+                await self._yellow_feedback_loop()
             elif self.current_state == ComposerState.SINGLE_ACTIVE:
                 await self._single_active_state_loop()
             elif self.current_state == ComposerState.COUPLE_FEEDBACK:
@@ -384,6 +387,12 @@ class LEDComposer(LEDComposerInterface):
         blue = Color(0, 0, 255)
         cyan = Color(0, 255, 255)
         await self._strobe_and_fade_feedback(blue, cyan, ComposerState.SINGLE_FEEDBACK, ComposerState.NOT_ACTIVE)
+    
+    async def _yellow_feedback_loop(self):
+        """Yellow/gold strobe for 2s then fade to black"""
+        yellow = Color(255, 255, 0)
+        gold = Color(255, 215, 0)
+        await self._strobe_and_fade_feedback(yellow, gold, ComposerState.YELLOW_FEEDBACK, ComposerState.NOT_ACTIVE)
     
     async def _single_active_state_loop(self):
         """Happy, energetic music-reactive patterns"""

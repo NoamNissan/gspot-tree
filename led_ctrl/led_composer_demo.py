@@ -75,12 +75,13 @@ class LEDComposerCLI:
             print("4. Couple Feedback (red/purple strobe)")
             print("5. Couple Active (romantic patterns)")
             print("6. Advertise (attention burst)")
+            print("7. Yellow Feedback (yellow/gold strobe)")
             print()
             
             # Control options
             print("⚙️  CONTROL:")
-            print("7. Show Parameters")
-            print("8. Show All Recipes")
+            print("8. Show Parameters")
+            print("9. Show All Recipes")
             print("0. Quit")
             print()
             
@@ -89,10 +90,10 @@ class LEDComposerCLI:
             from .recipe_manager import RECIPES
             recipe_items = list(RECIPES.items())
             
-            for i, (recipe_key, recipe) in enumerate(recipe_items[:8], 9):
+            for i, (recipe_key, recipe) in enumerate(recipe_items[:8], 10):
                 print(f"{i}. Manual: {recipe.name}")
             
-            print(f"... and {len(recipe_items) - 8} more (use option 8 to see all)")
+            print(f"... and {len(recipe_items) - 8} more (use option 9 to see all)")
             print()
             
             try:
@@ -124,8 +125,10 @@ class LEDComposerCLI:
             elif choice == "6":
                 await self.set_state(ComposerState.ADVERTISE)
             elif choice == "7":
-                await self.show_parameters()
+                await self.set_state(ComposerState.YELLOW_FEEDBACK)
             elif choice == "8":
+                await self.show_parameters()
+            elif choice == "9":
                 await self.show_all_recipes()
             elif choice == "birthday":
                 await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BIRTHDAY)
@@ -133,9 +136,9 @@ class LEDComposerCLI:
                 await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BAD_SONGS)
             elif choice == "starwars":
                 await self.composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.STARWARS)
-            elif choice.isdigit() and 9 <= int(choice) <= 16:
+            elif choice.isdigit() and 10 <= int(choice) <= 17:
                 # Manual recipe selection from first 8
-                recipe_index = int(choice) - 9
+                recipe_index = int(choice) - 10
                 if recipe_index < len(recipe_items) and recipe_index < 8:
                     recipe_key, recipe = recipe_items[recipe_index]
                     await self.set_manual_recipe(recipe_key)
@@ -143,7 +146,7 @@ class LEDComposerCLI:
                     print("❌ Recipe index out of range")
                     return
             else:
-                print("❌ Invalid choice. Please enter 0-16, or: birthday, bad_songs, starwars")
+                print("❌ Invalid choice. Please enter 0-17, or: birthday, bad_songs, starwars")
                 return
             
             # Brief pause to see the change
