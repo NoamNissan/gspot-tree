@@ -996,7 +996,7 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("water", {"speed": 2, "ripples": 2}),
-            EffectConfig("sparkle", {"density": 0.055, "period": 19, "duration": 0.15})
+            EffectConfig("sparkle", {"density": 0.055, "period": 16, "duration": 0.15})
         ]
     ),
     
