@@ -254,11 +254,12 @@ def main():
     # Initialize composer to get controller (GUI is created during initialization)
     cli.composer = create_led_composer("tree_config.yaml", force_simulation=force_simulation, separate_process=False)
     
-    # Get the GUI instance from the controller (no need to start yet)
+    # Get the GUI instance from the controller (only in simulation mode)
     gui_instance = None
-    if hasattr(cli.composer, 'controller') and hasattr(cli.composer.controller, 'pixels'):
-        if hasattr(cli.composer.controller.pixels, 'start_mainloop'):
-            gui_instance = cli.composer.controller.pixels
+    if force_simulation:
+        if hasattr(cli.composer, 'controller') and hasattr(cli.composer.controller, 'pixels'):
+            if hasattr(cli.composer.controller.pixels, 'start_mainloop'):
+                gui_instance = cli.composer.controller.pixels
     
     if gui_instance:
         # Store reference to GUI root for closing
