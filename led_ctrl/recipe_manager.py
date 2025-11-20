@@ -260,6 +260,9 @@ class RecipeManager:
         elif effect_type == "luminosity_scanner":
             from .pipeline_demo import LuminosityScannerEffect
             effect = LuminosityScannerEffect()
+        elif effect_type == "luminosity_spiral":
+            from .pipeline_demo import LuminositySpiralEffect
+            effect = LuminositySpiralEffect(self.tree_structure)
         elif effect_type == "rainbow_branches_skewed":
             from .pipeline_demo import RainbowBranchesSkewedEffect
             effect = RainbowBranchesSkewedEffect(self.tree_structure)
@@ -802,6 +805,12 @@ RECIPES = {
         ),
         effects=[
             EffectConfig("music_visualizer", {"mode": "pulse", "sensitivity": 1.0}),
+            EffectConfig("luminosity_spiral", {
+                "rotation_rate": 1.0,
+                "num_arms": ChoiceRange([1,2,3]),
+                "decay_rate": 120,
+                "speed": FloatRange(0.1,3)  # 5 updates per second
+            }),
             EffectConfig("sparkle", {"density": 0.055, "period": 10, "duration": 0.15})
         ]
     ),
@@ -1076,6 +1085,24 @@ RECIPES = {
         ]
     ),
     
+    "luminosity_spiral": Recipe(
+        name="Luminosity Spiral",
+        description="Galaxy spiral with rotating arms",
+        base_colors=BaseColorConfig(
+            colors=[Color(100, 0, 100)],
+            mode=TransitionMode.STATIC,
+            speed=0.01
+        ),
+        effects=[
+            EffectConfig("luminosity_spiral", {
+                "rotation_rate": 1.0,
+                "num_arms": ChoiceRange([1,2,3]),
+                "decay_rate": 120,
+                "speed": FloatRange(0.1,3)  # 5 updates per second
+            })
+        ]
+    ),
+    
     "color_blocks": Recipe(
         name="Color Blocks",
         description="Moving color blocks",
@@ -1085,7 +1112,7 @@ RECIPES = {
             speed=0.2
         ),
         effects=[
-            EffectConfig("blocks", {"speed": 1.5, "block_size": 6})
+            EffectConfig("blocks", {"speed": 0.5, "block_size": 6})
         ]
     ),
     

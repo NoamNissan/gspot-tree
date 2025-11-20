@@ -1490,6 +1490,107 @@ class RingColorsEffect(Effect):
         return result
 
 
+class LuminositySpiralEffect(Effect):
+    """Luminosity mask that creates galaxy spiral with multiple arms"""
+    
+    def __init__(self, tree_structure: TreeStructure = None, rotation_rate: float = 20.0, 
+                 num_arms: int = 2, decay_rate: int = 190, speed: float = 1.0):
+        super().__init__()
+        self.tree_structure = tree_structure
+        self.parameters = {
+            'rotation_rate': rotation_rate,
+            'num_arms': min(num_arms, 5),
+            'decay_rate': decay_rate,
+            'speed': speed
+        }
+        self.even_branch_index = 0
+        self.arms = None
+        self.blend_mode = BlendMode.REPLACE
+        
+    def _apply_effect(self, colors: Colors, elapsed: float) -> Colors:
+        if not self.tree_structure or not self.tree_structure.branches:
+            return colors
+        
+        num_arms = self.parameters['num_arms']
+        decay_rate = self.parameters['decay_rate']
+        speed = self.parameters['speed']
+        
+        # Initialize brightness array on first run
+        if 'brightness' not in self.internal_state:
+            self.internal_state['brightness'] = np.zeros(len(colors), dtype=np.int16)
+            self.internal_state['last_update'] = 0.0
+        
+        brightness = self.internal_state['brightness']
+        
+        # Only update at specified speed
+        update_interval = 1.0 / speed
+        if elapsed - self.internal_state['last_update'] >= update_interval:
+            self.internal_state['last_update'] = elapsed
+            
+            # Safe decay to avoid underflow
+            brightness = np.maximum(0, brightness - decay_rate).astype(np.int16)
+            
+            # Initialize arms
+            total_branches = len(self.tree_structure.branches)
+            if not self.arms:
+                self.space = (total_branches // num_arms) & ~0x1
+                self.arms = [[] for _ in range(num_arms)]
+            
+            # Create arms
+            arm_branch_index = self.even_branch_index
+            self.even_branch_index += 2
+            
+            for i in range(num_arms):
+                arm = self.arms[i]
+                self._create_arm(arm_branch_index + i * self.space, total_branches, arm, brightness)
+            
+            # Store brightness back
+            self.internal_state['brightness'] = brightness
+        
+        # Apply brightness to colors (convert 0-255 brightness to RGB)
+        result = colors.copy()
+        for i in range(len(colors)):
+            b = brightness[i] / 255.0  # Normalize to 0.0-1.0
+            if b > 0:
+                # Brighten by multiplying
+                mult = 1.0 + b
+                result[i] = Color(
+                    min(255, int(colors[i].r * mult)),
+                    min(255, int(colors[i].g * mult)),
+                    min(255, int(colors[i].b * mult))
+                )
+        
+        return result
+    
+    def _create_arm(self, arm_branch_index: int, total_branches: int, prev_leds: list, brightness: np.ndarray):
+        """Create spiral arm"""
+        leds = []
+        
+        for i in range(5):
+            branch_index = (arm_branch_index + i) % total_branches
+            branch_leds = self.tree_structure.branches[branch_index]
+            
+            if i < 2:
+                leds.append(branch_leds[-2])
+                leds.append(branch_leds[-1])
+            elif i < 4:
+                leds.append(branch_leds[-3])
+                leds.append(branch_leds[-4])
+            else:
+                leds.append(branch_leds[-5])
+                leds.append(branch_leds[-6])
+            
+            for l in leds:
+                if l < len(brightness):
+                    brightness[l] = 80
+            
+            for l in prev_leds:
+                if l < len(brightness):
+                    brightness[l] = 255
+            
+            prev_leds = leds
+
+
 class LuminosityScannerEffect(Effect):
     """Moving scanner beam luminosity mask (Cylon eye style)"""
     
