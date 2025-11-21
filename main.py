@@ -297,6 +297,15 @@ def _detect_operating_mode() -> OperatingMode:
 
 
 def main():
+    # Print the user ID of the process
+    print(f"Running as user ID: {os.getuid()}, group ID: {os.getgid()}")
+    try:
+        import pwd
+        username = pwd.getpwuid(os.getuid()).pw_name
+        print(f"Running as user: {username}")
+    except (ImportError, KeyError):
+        pass
+    
     # Check sudo permissions and setup memory permissions first
     print("Checking system permissions...")
     if not check_sudo_permission():

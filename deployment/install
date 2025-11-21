@@ -67,15 +67,11 @@ fi
 echo "Installing Python dependencies in virtual environment..."
 cd "$APP_DIR"
 
-# Remove existing virtual environment if it exists (to avoid path issues)
-if [ -d ".venv" ]; then
-    echo "Removing existing virtual environment..."
-    rm -rf .venv
+# Check if virtual environment exists
+if [ ! -d ".venv" ]; then
+    echo -e "${RED}Error: Virtual environment not found at $APP_DIR/.venv${NC}"
+    exit 1
 fi
-
-# Create new virtual environment
-echo "Creating virtual environment..."
-$PYTHON_PATH -m venv .venv
 
 # Install dependencies using the virtual environment's pip directly
 echo "Installing dependencies..."
@@ -85,13 +81,60 @@ $APP_DIR/.venv/bin/pip install -r requirements.txt
 echo "Setting up audio permissions..."
 usermod -a -G audio "$SERVICE_USER" 2>/dev/null || echo "Warning: Could not add user to audio group"
 
+# Get the user's UID and home directory for PulseAudio configuration
+SERVICE_UID=$(id -u "$SERVICE_USER")
+SERVICE_HOME=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
+XDG_RUNTIME_DIR="/run/user/${SERVICE_UID}"
+
+# Ensure the runtime directory exists and has correct permissions
+echo "Setting up PulseAudio runtime directory..."
+mkdir -p "$XDG_RUNTIME_DIR"
+chown "$SERVICE_USER:$SERVICE_USER" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+# Enable systemd user linger so user services can run without login session
+echo "Enabling systemd user linger for $SERVICE_USER..."
+loginctl enable-linger "$SERVICE_USER" 2>/dev/null || echo "Warning: Could not enable linger (may require systemd-logind)"
+
+# Start the user's systemd session if not already running
+echo "Starting systemd user session for $SERVICE_USER..."
+sudo -u "$SERVICE_USER" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user daemon-reload 2>/dev/null || true
+
+# Configure PulseAudio as a systemd user service
+echo "Configuring PulseAudio as a user service..."
+# Enable PulseAudio for the gspot user
+sudo -u "$SERVICE_USER" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user enable pulseaudio.service 2>/dev/null || echo "Warning: Could not enable PulseAudio user service"
+
+# Start PulseAudio for the gspot user
+echo "Starting PulseAudio user service..."
+if sudo -u "$SERVICE_USER" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user start pulseaudio.service 2>/dev/null; then
+    echo -e "${GREEN}PulseAudio user service started${NC}"
+else
+    echo -e "${YELLOW}Warning: Could not start PulseAudio user service. It will be started by the main service.${NC}"
+fi
+
+# Wait a moment for PulseAudio to start
+sleep 2
+
+# Verify PulseAudio is running
+if sudo -u "$SERVICE_USER" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" pactl info &>/dev/null; then
+    echo -e "${GREEN}PulseAudio is running and accessible for $SERVICE_USER${NC}"
+else
+    echo -e "${YELLOW}Warning: PulseAudio may not be running yet. The service will attempt to start it on boot.${NC}"
+fi
+
+# Stop the service if it's already running (to ensure clean restart with new config)
+if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+    echo "Stopping existing service..."
+    systemctl stop ${SERVICE_NAME}
+fi
 
 # Create systemd service file
 echo "Creating systemd service..."
 cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=GSpot Tree Service
-After=network.target sound.target
+After=network.target sound.target user@${SERVICE_UID}.service
 Wants=network.target
 
 [Service]
@@ -99,6 +142,10 @@ Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$APP_DIR
+# Ensure PulseAudio user service is running before starting the main process
+# Wait for user session, then start PulseAudio if needed, then verify it's accessible
+ExecStartPre=/bin/bash -c 'systemctl --user is-active --quiet pulseaudio.service || systemctl --user start pulseaudio.service || true'
+ExecStartPre=/bin/bash -c 'for i in {1..20}; do if pactl info &>/dev/null; then exit 0; fi; sleep 0.5; done; echo "Warning: PulseAudio may not be ready after 10 seconds"'
 ExecStart=$APP_DIR/.venv/bin/python $APP_DIR/main.py
 Restart=always
 RestartSec=10
@@ -108,6 +155,9 @@ StandardError=journal
 # Environment variables
 Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR
+Environment=PULSE_RUNTIME_PATH=$XDG_RUNTIME_DIR/pulse
+Environment=HOME=$SERVICE_HOME
 
 # Give the service access to audio devices
 SupplementaryGroups=audio
@@ -116,16 +166,46 @@ SupplementaryGroups=audio
 WantedBy=multi-user.target
 EOF
 
+# Verify the service file was created correctly
+if ! grep -q "User=$SERVICE_USER" /etc/systemd/system/${SERVICE_NAME}.service; then
+    echo -e "${RED}Error: Service file was not created correctly${NC}"
+    exit 1
+fi
+
 # Reload systemd and enable service
-echo "Enabling and starting service..."
+echo "Reloading systemd daemon..."
 systemctl daemon-reload
+
+echo "Enabling service..."
 systemctl enable ${SERVICE_NAME}
+
+echo "Starting service..."
 systemctl start ${SERVICE_NAME}
 
 # Check service status
 echo "Checking service status..."
 if systemctl is-active --quiet ${SERVICE_NAME}; then
     echo -e "${GREEN}Service is running successfully!${NC}"
+    
+    # Verify the service is running as the correct user
+    sleep 1  # Give the service a moment to start
+    SERVICE_UID=$(systemctl show -p User --value ${SERVICE_NAME} 2>/dev/null || echo "")
+    if [ "$SERVICE_UID" = "$SERVICE_USER" ]; then
+        echo -e "${GREEN}Service is confirmed to be running as user: $SERVICE_USER${NC}"
+    else
+        echo -e "${YELLOW}Warning: Service user configuration shows: $SERVICE_UID (expected: $SERVICE_USER)${NC}"
+        echo "Checking actual process user..."
+        MAIN_PID=$(systemctl show -p MainPID --value ${SERVICE_NAME} 2>/dev/null || echo "")
+        if [ -n "$MAIN_PID" ] && [ "$MAIN_PID" != "0" ]; then
+            PROCESS_USER=$(ps -o user= -p "$MAIN_PID" 2>/dev/null | tr -d ' ' || echo "")
+            if [ "$PROCESS_USER" = "$SERVICE_USER" ]; then
+                echo -e "${GREEN}Process is running as user: $PROCESS_USER${NC}"
+            else
+                echo -e "${RED}Error: Process is running as user: $PROCESS_USER (expected: $SERVICE_USER)${NC}"
+                echo "The service file may not be configured correctly. Please check /etc/systemd/system/${SERVICE_NAME}.service"
+            fi
+        fi
+    fi
 else
     echo -e "${RED}Service failed to start. Check logs with: journalctl -u ${SERVICE_NAME} -f${NC}"
     exit 1
@@ -139,5 +219,10 @@ echo "  View logs:    sudo journalctl -u ${SERVICE_NAME} -f"
 echo "  Stop service: sudo systemctl stop ${SERVICE_NAME}"
 echo "  Start service: sudo systemctl start ${SERVICE_NAME}"
 echo "  Restart service: sudo systemctl restart ${SERVICE_NAME}"
+echo ""
+echo "PulseAudio troubleshooting:"
+echo "  Check PulseAudio status: sudo -u $SERVICE_USER XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user status pulseaudio"
+echo "  Restart PulseAudio: sudo -u $SERVICE_USER XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user restart pulseaudio"
+echo "  Test PulseAudio: sudo -u $SERVICE_USER XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl info"
 echo ""
 echo "The RFID music player will now start automatically on boot." 
