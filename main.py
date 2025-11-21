@@ -2,6 +2,7 @@ from sound_controller import SoundController
 from light_controller import LightController
 from state_manager import StateManager, SystemState
 from rfid_reader import RFIDReader, OperatingMode
+from usage_logger import UsageLogger
 import argparse
 import sys
 import platform
@@ -100,13 +101,14 @@ def load_party_chips(txt_path):
 
 
 class RFIDHandler:
-    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set, party_chips: set):
+    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set, party_chips: set, usage_logger: UsageLogger = None):
         self.sound = sound_controller
         self.light = light_controller
         self.state = state_manager
         self.code_to_song = code_to_song
         self.stop_chips = stop_chips
         self.party_chips = party_chips
+        self.usage_logger = usage_logger
         self.recent_codes = deque()  # Store recent codes with timestamps
         self.processing_lock = threading.Lock()
         self.pending_timer = None  # Timer for pending state timeout
@@ -118,6 +120,10 @@ class RFIDHandler:
             print(f"Processing code: {code}")
             # Normalize the code (strip whitespace) to ensure consistent matching
             normalized_code = code.strip() if code else code
+            
+            # Log chip touch from RFID reader
+            if self.usage_logger:
+                self.usage_logger.log_chip_touch(normalized_code)
             
             # Debug: print received code for troubleshooting
             current_state = self.state.get_state()
@@ -221,6 +227,11 @@ class RFIDHandler:
                 if single_songs:
                     selected_song = random.choice(single_songs)
                     print(f"Pending state ended - no second chip. Playing random single-chip song: {selected_song}")
+                    
+                    # Log song start from RFID reader (single chip mode)
+                    if self.usage_logger:
+                        self.usage_logger.log_song_start(selected_song, "single_chip", chip_code=code)
+                    
                     self.state.start_song(selected_song, ChipType.SINGLE, callback=self.state.end_song)
                 else:
                     print(f"No songs found in {SINGLE_CHIP_DIR}")
@@ -231,11 +242,21 @@ class RFIDHandler:
         """Handle the case where two chips were detected within the window."""
         print("Handling double chip - second chip detected during pending state")
         # Assumes caller holds self.processing_lock
+        # Get the two chip codes for logging
+        # Convert deque to list before slicing (deque doesn't support slicing)
+        chip_codes = [c[0] for c in list(self.recent_codes)[-2:]] if len(self.recent_codes) >= 2 else []
+        chip_code_str = ",".join(chip_codes) if chip_codes else None
+        
         # Dual chip case - pick a random song from DOUBLE_CHIP_DIR
         double_songs = get_songs_in_directory(DOUBLE_CHIP_DIR)
         if double_songs:
             random_song = random.choice(double_songs)
             print(f"Dual chip detected! Playing random double-chip song: {random_song}")
+            
+            # Log song start from RFID reader (double chip/couple mode)
+            if self.usage_logger:
+                self.usage_logger.log_song_start(random_song, "double_chip", chip_code=chip_code_str)
+            
             self.state.start_song(random_song, ChipType.DOUBLE, callback=self.state.end_song)
         else:
             print(f"No songs found in {DOUBLE_CHIP_DIR}")
@@ -335,8 +356,13 @@ def main():
     code_to_song = load_rfid_song_mapping(CSV_FILE)
     stop_chips = load_stop_chips(STOP_CHIPS_FILE)
     party_chips = load_party_chips(PARTY_CHIPS_FILE)
+    
+    # Create usage logger for RFID reader interactions
+    usage_logger = UsageLogger()
+    print(f"Usage logger initialized. Log file: {usage_logger.get_log_file_path()}")
+    
     # Create the RFID handler
-    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips, party_chips)
+    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips, party_chips, usage_logger)
 
     # Ensure idle state on startup after light controller is ready
     try:
