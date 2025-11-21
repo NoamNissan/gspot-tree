@@ -20,9 +20,15 @@ SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
 STOP_CHIPS_FILE = "stop_chips.txt"
 PARTY_CHIPS_FILE = "party_chips.txt"
+BIRTHDAY_CHIPS_FILE = "birthday_chips.txt"
+BAD_SONGS_CHIPS_FILE = "bad_songs_chips.txt"
+STARWARS_CHIPS_FILE = "starwars_chips.txt"
 
 SINGLE_CHIP_DIR = os.path.join(SONGS_DIR, "single_chip")
 DOUBLE_CHIP_DIR = os.path.join(SONGS_DIR, "double_chip")
+BIRTHDAY_DIR = os.path.join(SONGS_DIR, "birthday")
+BAD_SONGS_DIR = os.path.join(SONGS_DIR, "bad_songs")
+STARWARS_DIR = os.path.join(SONGS_DIR, "starwars")
 
 
 def load_rfid_song_mapping(csv_path):
@@ -100,14 +106,44 @@ def load_party_chips(txt_path):
     return load_chips_from_file(txt_path, "party")
 
 
+def load_birthday_chips(txt_path):
+    """Load chip IDs from a text file that should activate birthday mode.
+    
+    Returns:
+        set: Set of chip IDs that trigger birthday mode
+    """
+    return load_chips_from_file(txt_path, "birthday")
+
+
+def load_bad_songs_chips(txt_path):
+    """Load chip IDs from a text file that should activate bad songs mode.
+    
+    Returns:
+        set: Set of chip IDs that trigger bad songs mode
+    """
+    return load_chips_from_file(txt_path, "bad_songs")
+
+
+def load_starwars_chips(txt_path):
+    """Load chip IDs from a text file that should activate Star Wars mode.
+    
+    Returns:
+        set: Set of chip IDs that trigger Star Wars mode
+    """
+    return load_chips_from_file(txt_path, "starwars")
+
+
 class RFIDHandler:
-    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set, party_chips: set, usage_logger: UsageLogger = None):
+    def __init__(self, sound_controller, light_controller, code_to_song, state_manager: StateManager, stop_chips: set, party_chips: set, birthday_chips: set = None, bad_songs_chips: set = None, starwars_chips: set = None, usage_logger: UsageLogger = None):
         self.sound = sound_controller
         self.light = light_controller
         self.state = state_manager
         self.code_to_song = code_to_song
         self.stop_chips = stop_chips
         self.party_chips = party_chips
+        self.birthday_chips = birthday_chips or set()
+        self.bad_songs_chips = bad_songs_chips or set()
+        self.starwars_chips = starwars_chips or set()
         self.usage_logger = usage_logger
         self.recent_codes = deque()  # Store recent codes with timestamps
         self.processing_lock = threading.Lock()
@@ -160,6 +196,39 @@ class RFIDHandler:
                     self.pending_timer.cancel()
                     self.pending_timer = None
                 self.state.go_party()
+                self.recent_codes.clear()
+                return
+            
+            # Check if this is a birthday chip - if so, play random birthday song
+            if normalized_code in self.birthday_chips:
+                print(f"Birthday chip detected: '{normalized_code}'. Activating birthday mode.")
+                # Cancel pending timer if it's running
+                if self.pending_timer is not None:
+                    self.pending_timer.cancel()
+                    self.pending_timer = None
+                self._handle_special_chip("birthday", BIRTHDAY_DIR, normalized_code)
+                self.recent_codes.clear()
+                return
+            
+            # Check if this is a bad songs chip - if so, play random bad songs song
+            if normalized_code in self.bad_songs_chips:
+                print(f"Bad songs chip detected: '{normalized_code}'. Activating bad songs mode.")
+                # Cancel pending timer if it's running
+                if self.pending_timer is not None:
+                    self.pending_timer.cancel()
+                    self.pending_timer = None
+                self._handle_special_chip("bad_songs", BAD_SONGS_DIR, normalized_code)
+                self.recent_codes.clear()
+                return
+            
+            # Check if this is a starwars chip - if so, play random starwars song
+            if normalized_code in self.starwars_chips:
+                print(f"Star Wars chip detected: '{normalized_code}'. Activating Star Wars mode.")
+                # Cancel pending timer if it's running
+                if self.pending_timer is not None:
+                    self.pending_timer.cancel()
+                    self.pending_timer = None
+                self._handle_special_chip("starwars", STARWARS_DIR, normalized_code)
                 self.recent_codes.clear()
                 return
             
@@ -265,6 +334,48 @@ class RFIDHandler:
         # Clear the recent codes after handling
         self.recent_codes.clear()
 
+    def _handle_special_chip(self, mode: str, songs_dir: str, chip_code: str):
+        """Handle special chip modes (birthday, bad_songs, starwars).
+        
+        Args:
+            mode: One of "birthday", "bad_songs", or "starwars"
+            songs_dir: Directory path containing songs for this mode
+            chip_code: The chip code that was scanned
+        """
+        print(f"Handling special chip mode: {mode}")
+        # Assumes caller holds self.processing_lock
+        
+        # Set LED state to special mode
+        try:
+            if mode == "birthday":
+                self.light.start_birthday()
+            elif mode == "bad_songs":
+                self.light.start_bad_songs()
+            elif mode == "starwars":
+                self.light.start_starwars()
+            else:
+                print(f"Unknown special mode: {mode}")
+                return
+        except Exception as e:
+            print(f"Warning: Failed to set LED state for {mode}: {e}")
+        
+        # Pick a random song from the appropriate directory
+        songs = get_songs_in_directory(songs_dir)
+        if songs:
+            random_song = random.choice(songs)
+            print(f"{mode.capitalize()} chip detected! Playing random {mode} song: {random_song}")
+            
+            # Log song start from RFID reader
+            if self.usage_logger:
+                self.usage_logger.log_song_start(random_song, mode, chip_code=chip_code)
+            
+            # Start playing the song (use SINGLE chip type as default for special modes)
+            self.state.start_song(random_song, ChipType.SINGLE, callback=self.state.end_song)
+        else:
+            print(f"No songs found in {songs_dir}")
+            # If no songs found, return to idle
+            self.state.go_idle()
+
 
 def check_sudo_permission():
     """Check if the process can run sudo commands."""
@@ -356,13 +467,17 @@ def main():
     code_to_song = load_rfid_song_mapping(CSV_FILE)
     stop_chips = load_stop_chips(STOP_CHIPS_FILE)
     party_chips = load_party_chips(PARTY_CHIPS_FILE)
+    birthday_chips = load_birthday_chips(BIRTHDAY_CHIPS_FILE)
+    bad_songs_chips = load_bad_songs_chips(BAD_SONGS_CHIPS_FILE)
+    starwars_chips = load_starwars_chips(STARWARS_CHIPS_FILE)
     
     # Create usage logger for RFID reader interactions
     usage_logger = UsageLogger()
     print(f"Usage logger initialized. Log file: {usage_logger.get_log_file_path()}")
     
     # Create the RFID handler
-    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips, party_chips, usage_logger)
+    handler = RFIDHandler(sound, light, code_to_song, state, stop_chips, party_chips, 
+                          birthday_chips, bad_songs_chips, starwars_chips, usage_logger)
 
     # Ensure idle state on startup after light controller is ready
     try:

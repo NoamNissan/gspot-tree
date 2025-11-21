@@ -1,0 +1,7 @@
+# Star Wars Chips Configuration
+# Each line contains a chip ID that will activate Star Wars mode
+# When scanned, a random song from songs/starwars/ will play
+# Empty lines and lines starting with # are ignored
+# Example:
+# ABC123
+# DEF456

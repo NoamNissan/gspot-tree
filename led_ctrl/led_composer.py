@@ -465,6 +465,7 @@ class LEDComposer(LEDComposerInterface):
         await self.set_state(ComposerState.SINGLE_ACTIVE)
 
     async def _starwars_state_loop(self):
+        print("Starting Star Wars state loop")
         short_recipe_time, transition_time = self._get_short_transition_recipe_times()
         await self._load_recipe("music_pulse_blue", transition_time)
         await self._sleep_while_in_state(short_recipe_time)

@@ -1,0 +1,8 @@
+# Bad Songs Chips Configuration
+# Each line contains a chip ID that will activate bad songs mode
+# When scanned, a random song from songs/bad_songs/ will play
+# Empty lines and lines starting with # are ignored
+# Example:
+# ABC123
+# DEF456
+

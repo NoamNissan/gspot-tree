@@ -137,6 +137,33 @@ class LightController:
 
         self._submit_coroutine(_apply)
 
+    def start_birthday(self):
+        """Start birthday state."""
+        print("Starting birthday state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BIRTHDAY, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_bad_songs(self):
+        """Start bad songs state."""
+        print("Starting bad songs state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.BAD_SONGS, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
+    def start_starwars(self):
+        """Start Star Wars state."""
+        print("Starting Star Wars state in LightController")
+        self._cancel_music_task()
+        def _apply():
+            return self._led_composer.set_state(ComposerState.SINGLE_ACTIVE, list=ComposerState.STARWARS, transition_time=0.5)
+
+        self._submit_coroutine(_apply)
+
     def run_recipe(self, recipe_name: str):
         """Run a single recipe continuously"""
         def _apply():

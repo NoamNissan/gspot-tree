@@ -1,0 +1,7 @@
+# Birthday Chips Configuration
+# Each line contains a chip ID that will activate birthday mode
+# When scanned, a random song from songs/birthday/ will play
+# Empty lines and lines starting with # are ignored
+# Example:
+# ABC123
+# DEF456
