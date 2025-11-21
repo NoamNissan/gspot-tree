@@ -207,6 +207,136 @@ class LEDComposer(LEDComposerInterface):
         await self.set_state(ComposerState.MANUAL)
         await self._load_recipe(recipe_name, transition_time=0.5)
         print(f"🎛️ Manual recipe loaded: {recipe_name}")
+
+    async def run_recipe(self, recipe_name: str):
+        """Run a recipe in manual mode (for web controller)"""
+        await self.set_manual_recipe(recipe_name)
+
+    async def clear_all_leds(self):
+        """Clear all LEDs to black"""
+        from .led_controller import Color
+        from .pipeline_demo import TransitionMode
+        colors = [Color(0, 0, 0)] * len(self.controller.pipeline.colors)
+        self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        print("💡 All LEDs cleared to black")
+
+    async def set_led_range(self, range_str: str):
+        """Set specific LED range to white, all others black"""
+        from .led_controller import Color
+        from .pipeline_demo import TransitionMode
+        
+        num_pixels = len(self.controller.pipeline.colors)
+        
+        # Parse range string
+        if ',' in range_str:
+            start_idx, end_idx = map(int, range_str.split(','))
+        else:
+            start_idx = end_idx = int(range_str)
+        
+        # Validate indices
+        if start_idx < 0 or end_idx >= num_pixels or start_idx > end_idx:
+            print(f"❌ Invalid range: {start_idx}-{end_idx} for {num_pixels} LEDs")
+            return
+        
+        # Create colors array - black with white range
+        colors = [Color(0, 0, 0)] * num_pixels
+        for i in range(start_idx, end_idx + 1):
+            colors[i] = Color(255, 255, 255)
+        
+        # Set colors
+        self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        print(f"💡 LEDs {start_idx}-{end_idx} set to white")
+
+    async def set_ring(self, ring_id: int):
+        """Set specific ring to white, all others black"""
+        from .led_controller import Color
+        from .pipeline_demo import TransitionMode
+        
+        num_pixels = len(self.controller.pipeline.colors)
+        
+        # Get LEDs for this ring
+        ring_leds = []
+        if ring_id < len(self.controller.tree_structure.rings):
+            for pair in self.controller.tree_structure.rings[ring_id]:
+                ring_leds.extend(pair)
+        
+        if not ring_leds:
+            print(f"❌ Ring {ring_id} not found")
+            return
+        
+        # Create colors array - black with ring LEDs white
+        colors = [Color(0, 0, 0)] * num_pixels
+        for led_idx in ring_leds:
+            if 0 <= led_idx < num_pixels:
+                colors[led_idx] = Color(255, 255, 255)
+        
+        # Set colors
+        self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        print(f"💡 Ring {ring_id} set to white")
+
+    async def set_branch(self, branch_id: int):
+        """Set specific branch to white, all others black"""
+        from .led_controller import Color
+        from .pipeline_demo import TransitionMode
+        
+        num_pixels = len(self.controller.pipeline.colors)
+        
+        # Get LEDs for this branch
+        branch_leds = []
+        if branch_id < len(self.controller.tree_structure.branches):
+            for pair in self.controller.tree_structure.branches[branch_id]:
+                branch_leds.extend(pair)
+        
+        if not branch_leds:
+            print(f"❌ Branch {branch_id} not found")
+            return
+        
+        # Create colors array - black with branch LEDs white
+        colors = [Color(0, 0, 0)] * num_pixels
+        for led_idx in branch_leds:
+            if 0 <= led_idx < num_pixels:
+                colors[led_idx] = Color(255, 255, 255)
+        
+        # Set colors
+        self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        print(f"💡 Branch {branch_id} set to white")
+
+    async def led_crawl(self, blink_duration: float = 2.0):
+        """LED crawl mode - progressively light up LEDs with blinking"""
+        import time
+        from .led_controller import Color
+        from .pipeline_demo import TransitionMode
+        
+        num_pixels = len(self.controller.pipeline.colors)
+        
+        print(f"🐛 LED Crawl Mode - {num_pixels} LEDs")
+        print(f"   Blink duration: {blink_duration}s per LED")
+        
+        for current_led in range(num_pixels):
+            print(f"   LED {current_led}: blinking...")
+            
+            # Blink current LED for blink_duration
+            blink_start = time.time()
+            while time.time() - blink_start < blink_duration:
+                colors = [Color(0, 0, 0)] * num_pixels
+                
+                # Set previous LEDs to solid white
+                for i in range(current_led):
+                    colors[i] = Color(255, 255, 255)
+                
+                # Blink current LED (0.5s on/off cycle)
+                if int((time.time() - blink_start) * 2) % 2 == 0:
+                    colors[current_led] = Color(255, 255, 255)
+                
+                self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+                await asyncio.sleep(0.1)
+            
+            print(f"   LED {current_led}: solid white")
+        
+        # Final state - all LEDs solid white
+        colors = [Color(255, 255, 255)] * num_pixels
+        self.controller.pipeline.set_base_colors(colors, TransitionMode.STATIC)
+        print("🐛 LED Crawl completed - all LEDs solid white")
     
     async def _recipe_randomizer_loop(self):
         """Main recipe randomization loop - delegates to state-specific loops"""

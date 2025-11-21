@@ -13,6 +13,7 @@ import threading
 import subprocess
 from collections import deque
 from constants import DUAL_CHIP_WINDOW, ChipType, NUM_PIXELS
+import signal
 
 SONGS_DIR = "songs"
 CSV_FILE = "rfid_songs.csv"
@@ -322,6 +323,7 @@ def main():
     parser.add_argument("--no-simulation", dest="simulation", action="store_false", help="Disable simulation mode")
     parser.add_argument("--persistent-gui", dest="persistent_gui", action="store_true", help="Keep mock LED GUI open persistently (simulation only)")
     parser.add_argument("--no-persistent-gui", dest="persistent_gui", action="store_false", help="Do not start persistent mock LED GUI")
+    parser.add_argument("--web-port", type=int, default=5000, help="Port for web controller (default: 5000)")
     parser.set_defaults(simulation=False, persistent_gui=False)
     args = parser.parse_args()
 
@@ -381,13 +383,56 @@ def main():
     print("Ready for RFID scans. Scan a tag to play a song.")
     print("Scan two tags within 5 seconds for a random song!")
 
+    # Start web controller in background thread
+    web_controller_thread = None
+    web_controller_shutdown = threading.Event()
+    
+    def web_controller_worker():
+        """Run Flask web controller in background"""
+        try:
+            # Import here to avoid circular dependencies
+            import sys
+            web_controller_path = os.path.join(os.path.dirname(__file__), "web_controller")
+            sys.path.insert(0, web_controller_path)
+            from app import create_app, run_app
+            
+            # Create app with StateManager
+            app_instance = create_app(state_mgr=state, cwd=os.path.dirname(__file__), port=args.web_port)
+            
+            # Run Flask app (this will block until shutdown)
+            print(f"🌐 Starting web controller on port {args.web_port}...")
+            run_app(port=args.web_port, host='0.0.0.0', debug=False)
+        except Exception as e:
+            print(f"Error in web controller: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            web_controller_shutdown.set()
+    
+    # Start web controller thread
+    web_controller_thread = threading.Thread(target=web_controller_worker, daemon=True)
+    web_controller_thread.start()
+    
+    # Give web controller a moment to start
+    time.sleep(0.5)
+
+    # Setup signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        print("\nShutting down...")
+        rfid.stop_continuous_reading()
+        # Web controller thread is daemon=True, so it will stop automatically
+        # when main process exits
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     # Start GUI mainloop in main thread
     if gui_instance:
         try:
             gui_instance.start_mainloop()
         except KeyboardInterrupt:
-            print("\nShutting down...")
-            rfid.stop_continuous_reading()
+            signal_handler(signal.SIGINT, None)
     else:
         # If no GUI, just wait for the RFID thread
         try:
@@ -395,14 +440,7 @@ def main():
             while rfid_thread.is_alive() and not rfid.is_shutdown_requested():
                 rfid_thread.join(timeout=0.1)  # Check every 100ms
         except KeyboardInterrupt:
-            print("\nShutting down...")
-            rfid.stop_continuous_reading()
-            # Wait a bit for threads to finish, but don't block indefinitely
-            try:
-                rfid_thread.join(timeout=2.0)
-            except KeyboardInterrupt:
-                print("Force shutdown...")
-                pass
+            signal_handler(signal.SIGINT, None)
     
     # Check if shutdown was requested and exit
     if rfid.is_shutdown_requested():

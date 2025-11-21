@@ -137,6 +137,70 @@ class LightController:
 
         self._submit_coroutine(_apply)
 
+    def run_recipe(self, recipe_name: str):
+        """Run a single recipe continuously"""
+        def _apply():
+            return self._led_composer.run_recipe(recipe_name)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
+            return True
+        return False
+
+    def clear_all_leds(self):
+        """Clear all LEDs to black"""
+        def _apply():
+            return self._led_composer.clear_all_leds()
+        
+        self._submit_coroutine(_apply)
+
+    def set_led_range(self, range_str: str):
+        """Set specific LED range to white, all others black"""
+        def _apply():
+            return self._led_composer.set_led_range(range_str)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
+
+    def set_ring(self, ring_id: int):
+        """Set specific ring to white, all others black"""
+        def _apply():
+            return self._led_composer.set_ring(ring_id)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
+
+    def set_branch(self, branch_id: int):
+        """Set specific branch to white, all others black"""
+        def _apply():
+            return self._led_composer.set_branch(branch_id)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
+
+    def led_crawl(self, blink_duration: float = 2.0):
+        """LED crawl mode - progressively light up LEDs with blinking"""
+        def _apply():
+            return self._led_composer.led_crawl(blink_duration)
+        
+        self._cancel_music_task()
+        future = self._submit_coroutine(_apply)
+        if future:
+            self._music_task = future
+            future.add_done_callback(self._on_music_task_done)
+
     def shutdown(self):
         """Cleanly stop rendering and background loop."""
         if not self._loop:

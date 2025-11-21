@@ -185,6 +185,129 @@ class StateManager:
             self._state = SystemState.PARTY
             print("State updated: PARTY")
 
+    def can_start_led_recipe(self) -> bool:
+        """
+        Check if LED recipes can be started.
+        Recipes can only run when not playing music.
+        
+        Returns:
+            True if recipes can be started, False if a song is currently playing
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot start LED recipe: song is currently playing")
+                return False
+            return True
+
+    def start_led_recipe(self, recipe_name: str) -> bool:
+        """
+        Start an LED recipe. Only works when not playing music.
+        
+        Args:
+            recipe_name: Name of the recipe to run
+            
+        Returns:
+            True if recipe was started, False if music is playing or recipe not found
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot start LED recipe: song is currently playing")
+                return False
+            
+            # Stop any current audio and go to idle lights first
+            self._unsafe_stop_audio()
+            self._enter_idle_lights()
+            
+            # Run the recipe
+            success = self.light.run_recipe(recipe_name)
+            if success:
+                print(f"StateManager: Started LED recipe '{recipe_name}'")
+            return success
+
+    def clear_all_leds(self) -> None:
+        """Clear all LEDs to black. Works even when playing music."""
+        self.light.clear_all_leds()
+
+    def set_led_range(self, range_str: str) -> bool:
+        """
+        Set specific LED range to white. Only works when not playing music.
+        
+        Args:
+            range_str: Range string like "5" or "5,10"
+            
+        Returns:
+            True if range was set, False if music is playing
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot set LED range: song is currently playing")
+                return False
+            
+            self._unsafe_stop_audio()
+            self._enter_idle_lights()
+            self.light.set_led_range(range_str)
+            return True
+
+    def set_ring(self, ring_id: int) -> bool:
+        """
+        Set specific ring to white. Only works when not playing music.
+        
+        Args:
+            ring_id: Ring index to set
+            
+        Returns:
+            True if ring was set, False if music is playing
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot set ring: song is currently playing")
+                return False
+            
+            self._unsafe_stop_audio()
+            self._enter_idle_lights()
+            self.light.set_ring(ring_id)
+            return True
+
+    def set_branch(self, branch_id: int) -> bool:
+        """
+        Set specific branch to white. Only works when not playing music.
+        
+        Args:
+            branch_id: Branch index to set
+            
+        Returns:
+            True if branch was set, False if music is playing
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot set branch: song is currently playing")
+                return False
+            
+            self._unsafe_stop_audio()
+            self._enter_idle_lights()
+            self.light.set_branch(branch_id)
+            return True
+
+    def led_crawl(self, blink_duration: float = 2.0) -> bool:
+        """
+        Start LED crawl mode. Only works when not playing music.
+        
+        Args:
+            blink_duration: Duration in seconds per LED blink
+            
+        Returns:
+            True if crawl was started, False if music is playing
+        """
+        with self._lock:
+            if self._state == SystemState.PLAYING:
+                print("Cannot start LED crawl: song is currently playing")
+                return False
+            
+            self._unsafe_stop_audio()
+            self._enter_idle_lights()
+            self.light.led_crawl(blink_duration)
+            return True
+
     # Internal helpers (must be called under lock)
     def _unsafe_stop_audio(self) -> None:
         try:

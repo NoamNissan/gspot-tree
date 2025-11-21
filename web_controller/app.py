@@ -10,8 +10,19 @@ import time
 import os
 import signal
 import glob
+import sys
+
+# Add parent directory to path to import constants
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from constants import ChipType
 
 CWD="."
+
+# Global state manager (set by create_app)
+state_manager = None
 
 app = Flask(__name__)
 
@@ -20,7 +31,10 @@ def get_available_recipes():
     """Get recipes organized by category from recipe_manager"""
     import sys
     import os
-    sys.path.insert(0, os.path.join(CWD, '..'))
+    
+    # Add parent directory to path to import led_ctrl
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
     
     from led_ctrl.recipe_manager import RECIPES
     
@@ -41,13 +55,13 @@ def get_available_recipes():
     
     return ring_recipes, branch_recipes, general_recipes
 
-RING_RECIPES, BRANCH_RECIPES, GENERAL_RECIPES = get_available_recipes()
+# Initialize recipes (will be called after CWD is set)
+RING_RECIPES = []
+BRANCH_RECIPES = []
+GENERAL_RECIPES = []
 
-# Global process tracking
-current_process = None
+# Global state tracking
 current_recipe = None
-music_process = None
-current_song = None
 
 def get_songs():
     """Get list of available songs organized by folder"""
@@ -84,128 +98,94 @@ def get_songs():
     
     return songs_by_folder
 
-def kill_current_process():
-    """Kill the current LED orchestrator process"""
-    global current_process
-    if current_process and current_process.poll() is None:
-        try:
-            current_process.terminate()
-            current_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            current_process.kill()
-        current_process = None
+def stop_current_recipe():
+    """Stop current LED recipe by going to idle"""
+    global state_manager, current_recipe
+    if state_manager:
+        state_manager.go_idle()
+    current_recipe = None
 
-def kill_music_process():
-    """Kill the current music process"""
-    global music_process, current_song
-    if music_process and music_process.poll() is None:
-        try:
-            music_process.terminate()
-            music_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            music_process.kill()
-        music_process = None
-        current_song = None
+def get_current_song():
+    """Get the current song being played via StateManager"""
+    global state_manager
+    if state_manager:
+        state = state_manager.get_state()
+        if state.value == "PLAYING":
+            # StateManager doesn't expose current_song directly, but we can check state
+            return "playing"  # Indicate that something is playing
+    return None
 
 def run_recipe(recipe_id, pixels=60):
-    """Run LED orchestrator with specified recipe"""
-    global current_process, current_recipe
+    """Run LED recipe using StateManager"""
+    global current_recipe, state_manager
     
-    # Kill any existing process
-    kill_current_process()
-    
-    # Start new process
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--recipe", recipe_id,
-        "--pixels", str(pixels),
-        "--tree-config", "../led_ctrl/tree_config.yaml"
-    ]
-   
-    try:
-        print("cmd",cmd)
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        current_recipe = recipe_id
-        return True
-    except Exception as e:
-        print(f"Error starting recipe {recipe_id}: {e}")
+    if not state_manager:
+        print("StateManager not available")
         return False
+    
+    # Use StateManager to start the recipe
+    success = state_manager.start_led_recipe(recipe_id)
+    if success:
+        current_recipe = recipe_id
+    return success
 
 def run_recipe_with_params(recipe_id, pixels, freq, color):
-    """Run LED orchestrator with recipe and custom parameters"""
-    global current_process, current_recipe
+    """Run LED recipe with custom parameters using StateManager"""
+    global current_recipe, state_manager
     
-    # Kill any existing process
-    kill_current_process()
-    
-    # Start new process with parameters
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--recipe", recipe_id,
-        "--pixels", str(pixels),
-        "--strobe-freq", str(freq),
-        "--strobe-color", color
-    ]
-    
-    try:
-        print("cmd",cmd)
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        current_recipe = f"{recipe_id} ({freq}Hz {color})"
-        return True
-    except Exception as e:
-        print(f"Error starting strobe: {e}")
+    if not state_manager:
+        print("StateManager not available")
         return False
+    
+    # For now, just run the recipe (parameter support can be added later if needed)
+    # The color_strobe recipe should handle its own parameters
+    success = state_manager.start_led_recipe(recipe_id)
+    if success:
+        current_recipe = f"{recipe_id} ({freq}Hz {color})"
+    return success
 
 def play_song(filename):
-    """Play a song using mpg123 or aplay"""
-    global music_process, current_song
+    """Play a song using StateManager"""
+    global state_manager
     
-    # Kill any existing music
-    kill_music_process()
-    
-    songs_dir = f"{CWD}/../songs"
-    filepath = os.path.join(songs_dir, filename)
-    
-    if not os.path.exists(filepath):
+    if not state_manager:
         return False
     
-    # Try mpg123 first, then aplay
+    # Convert relative path to absolute path
+    songs_dir = os.path.join(CWD, "..", "songs")
+    if not os.path.isabs(filename):
+        filepath = os.path.join(songs_dir, filename)
+    else:
+        filepath = filename
+    
+    # Normalize the path
+    filepath = os.path.normpath(filepath)
+    
+    if not os.path.exists(filepath):
+        print(f"Song file not found: {filepath}")
+        return False
+    
     try:
-        music_process = subprocess.Popen(
-            ["mpg123", filepath],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        current_song = filename
+        # Determine chip type based on directory
+        if "single_chip" in filepath:
+            chip_type = ChipType.SINGLE
+        elif "double_chip" in filepath:
+            chip_type = ChipType.DOUBLE
+        else:
+            # Default to single chip
+            chip_type = ChipType.SINGLE
+        
+        state_manager.start_song(filepath, chip_type)
         return True
-    except FileNotFoundError:
-        try:
-            music_process = subprocess.Popen(
-                ["aplay", filepath],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            current_song = filename
-            return True
-        except FileNotFoundError:
-            return False
+    except Exception as e:
+        print(f"Error playing song: {e}")
+        return False
 
 @app.route('/')
 def index():
     """Main control page"""
     songs = get_songs()
+    current_song = get_current_song()
     return render_template('index.html', 
                          ring_recipes=RING_RECIPES, 
                          branch_recipes=BRANCH_RECIPES, 
@@ -227,32 +207,13 @@ def start_recipe(recipe_id):
 @app.route('/stop')
 def stop_recipe():
     """Stop current recipe and clear all LEDs"""
-    global current_recipe
-    kill_current_process()
+    global current_recipe, state_manager
     
-    # Wait a moment for process to fully stop
-    import time
-    time.sleep(0.2)
-    
-    # Clear all LEDs
-    pixels = request.args.get('pixels', 60, type=int)
-    try:
-        clear_cmd = [
-            "python3", 
-            "../led_ctrl/led_orchestrator.py", 
-            "--clear-all",
-            "--pixels", str(pixels)
-        ]
-        print("cmd",clear_cmd)
-        clear_process = subprocess.Popen(
-            clear_cmd,
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        clear_process.wait(timeout=5)
-    except Exception:
-        pass  # If clearing fails, ignore
+    if state_manager:
+        # Stop current recipe and go to idle
+        state_manager.go_idle()
+        # Clear all LEDs
+        state_manager.clear_all_leds()
     
     current_recipe = None
     return jsonify({"status": "success", "message": "Stopped and cleared"})
@@ -268,8 +229,11 @@ def play_music(filename):
 @app.route('/stop_music')
 def stop_music():
     """Stop current music"""
-    kill_music_process()
-    return jsonify({"status": "success", "message": "Music stopped"})
+    global state_manager
+    if state_manager:
+        state_manager.end_song()
+        return jsonify({"status": "success", "message": "Music stopped"})
+    return jsonify({"status": "error", "message": "StateManager not available"}), 500
 
 @app.route('/strobe')
 def start_strobe():
@@ -282,136 +246,74 @@ def start_strobe():
     if run_recipe_with_params('color_strobe', pixels, freq, color):
         return jsonify({"status": "success", "frequency": freq, "color": color})
     else:
-        return jsonify({"status": "error", "message": "Failed to start strobe"}), 500
+        return jsonify({"status": "error", "message": "Failed to start strobe (may be playing music)"}), 500
 
 @app.route('/crawl')
 def start_crawl():
     """Start LED crawl mode"""
-    global current_process, current_recipe
+    global current_recipe, state_manager
     
-    pixels = request.args.get('pixels', 60, type=int)
+    if not state_manager:
+        return jsonify({"status": "error", "message": "StateManager not available"}), 500
+    
     blink_time = request.args.get('blink_time', 2.0, type=float)
     
-    kill_current_process()
-    
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--led-crawl",
-        "--pixels", str(pixels),
-        "--crawl-blink-time", str(blink_time),
-        "--tree-config", "../led_ctrl/tree_config.yaml"
-    ]
-    
-    try:
-        print("cmd",cmd)
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
-        )
-        # Print first few lines of output
-        for line in current_process.stdout:
-            print("Process output:", line.decode().strip())
-
+    success = state_manager.led_crawl(blink_time)
+    if success:
         current_recipe = f"LED Crawl ({blink_time}s blink)"
         return jsonify({"status": "success", "mode": "crawl", "blink_time": blink_time})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    else:
+        return jsonify({"status": "error", "message": "Cannot start crawl: song is currently playing"}), 500
 
 @app.route('/set_led_range')
 def set_led_range():
     """Set specific LED range"""
-    global current_process, current_recipe
+    global current_recipe, state_manager
     
-    pixels = request.args.get('pixels', 60, type=int)
+    if not state_manager:
+        return jsonify({"status": "error", "message": "StateManager not available"}), 500
+    
     led_range = request.args.get('range', '')
     
     if not led_range:
         return jsonify({"status": "error", "message": "Range parameter required"}), 400
     
-    kill_current_process()
-    
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--set-led-range", led_range,
-        "--pixels", str(pixels),
-        "--tree-config", "../led_ctrl/tree_config.yaml"
-    ]
-    
-    try:
-        print("cmd",cmd)
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+    success = state_manager.set_led_range(led_range)
+    if success:
         current_recipe = f"LED Range: {led_range}"
         return jsonify({"status": "success", "mode": "range", "range": led_range})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    else:
+        return jsonify({"status": "error", "message": "Cannot set LED range: song is currently playing"}), 500
 
 @app.route('/set_ring/<int:ring_id>')
 def set_ring(ring_id):
     """Set specific ring"""
-    global current_process, current_recipe
+    global current_recipe, state_manager
     
-    pixels = request.args.get('pixels', 60, type=int)
+    if not state_manager:
+        return jsonify({"status": "error", "message": "StateManager not available"}), 500
     
-    kill_current_process()
-    
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--set-ring", str(ring_id),
-        "--pixels", str(pixels),
-        "--tree-config", "../led_ctrl/tree_config.yaml"
-    ]
-    
-    try:
-        print("cmd",cmd)
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+    success = state_manager.set_ring(ring_id)
+    if success:
         current_recipe = f"Ring {ring_id}"
         return jsonify({"status": "success", "mode": "ring", "ring": ring_id})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    else:
+        return jsonify({"status": "error", "message": "Cannot set ring: song is currently playing"}), 500
 
 @app.route('/set_branch/<int:branch_id>')
 def set_branch(branch_id):
     """Set specific branch"""
-    global current_process, current_recipe
+    global current_recipe, state_manager
     
-    pixels = request.args.get('pixels', 60, type=int)
+    if not state_manager:
+        return jsonify({"status": "error", "message": "StateManager not available"}), 500
     
-    kill_current_process()
-    
-    cmd = [
-        "python3", 
-        "../led_ctrl/led_orchestrator.py", 
-        "--set-branch", str(branch_id),
-        "--pixels", str(pixels),
-        "--tree-config", "../led_ctrl/tree_config.yaml"
-    ]
-    
-    try:
-        current_process = subprocess.Popen(
-            cmd, 
-            cwd=CWD,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+    success = state_manager.set_branch(branch_id)
+    if success:
         current_recipe = f"Branch {branch_id}"
         return jsonify({"status": "success", "mode": "branch", "branch": branch_id})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    else:
+        return jsonify({"status": "error", "message": "Cannot set branch: song is currently playing"}), 500
 
 @app.route('/volume', methods=['POST'])
 def set_volume():
@@ -444,17 +346,46 @@ def get_volume():
 @app.route('/status')
 def get_status():
     """Get current status"""
-    global current_process, current_recipe, music_process, current_song
+    global current_recipe, state_manager
     
-    is_running = current_process and current_process.poll() is None
-    music_playing = music_process and music_process.poll() is None
+    # Check if a recipe is running (not playing music and recipe is set)
+    music_playing = state_manager and state_manager.get_state().value == "PLAYING"
+    recipe_running = not music_playing and current_recipe is not None
+    current_song = get_current_song()
     
     return jsonify({
-        "running": is_running,
-        "recipe": current_recipe if is_running else None,
+        "running": recipe_running,
+        "recipe": current_recipe if recipe_running else None,
         "music_playing": music_playing,
         "current_song": current_song if music_playing else None
     })
+
+def create_app(state_mgr=None, cwd=".", port=5000):
+    """Create and configure the Flask app with StateManager"""
+    global state_manager, CWD, RING_RECIPES, BRANCH_RECIPES, GENERAL_RECIPES
+    state_manager = state_mgr
+    CWD = cwd
+    # Load recipes after CWD is set
+    RING_RECIPES, BRANCH_RECIPES, GENERAL_RECIPES = get_available_recipes()
+    return app
+
+def run_app(port=5000, host='0.0.0.0', debug=False):
+    """Run the Flask app"""
+    print(f"🌐 LED Web Controller starting...")
+    print(f"📁 Working directory: {CWD}")
+    print(f"📱 Access from your phone: http://<raspberry-pi-ip>:{port}")
+    
+    try:
+        # Use werkzeug's development server
+        from werkzeug.serving import make_server
+        server = make_server(host, port, app, threaded=True)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Web controller shutting down...")
+        stop_current_recipe()
+    except Exception as e:
+        print(f"Error in web controller server: {e}")
+        stop_current_recipe()
 
 if __name__ == '__main__':
     import argparse
@@ -466,13 +397,4 @@ if __name__ == '__main__':
     # Override CWD if provided
     CWD = args.cwd
     
-    print("🌐 LED Web Controller starting...")
-    print(f"📁 Working directory: {CWD}")
-    print(f"📱 Access from your phone: http://<raspberry-pi-ip>:{args.port}")
-    
-    try:
-        app.run(host='0.0.0.0', port=args.port, debug=False)
-    except KeyboardInterrupt:
-        print("\n🛑 Shutting down...")
-        kill_current_process()
-        kill_music_process()
+    run_app(port=args.port)
