@@ -502,7 +502,11 @@
                     // Update LED status
                     if (data.running && data.recipe) {
                         ledStatusEl.className = 'status running';
-                        ledStatusEl.innerHTML = `🎨 Running: ${data.recipe}`;
+                        if (data.music_playing && data.manual_override) {
+                            ledStatusEl.innerHTML = `🎨 Override: ${data.recipe} (tap again to return to music-reactive)`;
+                        } else {
+                            ledStatusEl.innerHTML = `🎨 Running: ${data.recipe}`;
+                        }
                         currentRecipe = data.recipe;
                         
                         // Highlight active recipe card
@@ -515,7 +519,11 @@
                         });
                     } else {
                         ledStatusEl.className = 'status stopped';
-                        ledStatusEl.innerHTML = '⏹️ LEDs Stopped';
+                        if (data.music_playing) {
+                            ledStatusEl.innerHTML = '🎵 Music-Reactive LEDs';
+                        } else {
+                            ledStatusEl.innerHTML = '⏹️ LEDs Stopped';
+                        }
                         currentRecipe = null;
                         recipeCards.forEach(card => card.classList.remove('active'));
                     }

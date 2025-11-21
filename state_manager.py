@@ -26,7 +26,9 @@ class StateManager:
         self.light = light_controller
         self._state = SystemState.IDLE
         self._current_song: Optional[str] = None
+        self._current_chip_type: Optional[ChipType] = None  # Track chip type for current song
         self._playback_thread: Optional[Thread] = None
+        self._manual_recipe_override: Optional[str] = None  # Track manual recipe override during music
         self._lock = RLock()
         print("StateManager initialized: state=IDLE")
 
@@ -56,8 +58,9 @@ class StateManager:
             
             # Set state before releasing lock
             self._current_song = song_filename
+            self._current_chip_type = chip_type  # Store chip type for restoring music-reactive pattern
             self._state = SystemState.PLAYING
-            print(f"State updated: PLAYING (song='{self._current_song}')")
+            print(f"State updated: PLAYING (song='{self._current_song}', chip_type='{chip_type}')")
         
         # Define playback coroutine that will be used for both single and double chip types
         def playback_coroutine():
@@ -135,6 +138,8 @@ class StateManager:
             self._unsafe_stop_audio()
             self._enter_idle_lights()
             self._current_song = None
+            self._current_chip_type = None
+            self._manual_recipe_override = None  # Clear manual override when song ends
             self._state = SystemState.IDLE
             print("State updated: IDLE (song=None)")
 
@@ -144,6 +149,8 @@ class StateManager:
             self._unsafe_stop_audio()
             self._enter_idle_lights()
             self._current_song = None
+            self._current_chip_type = None
+            self._manual_recipe_override = None  # Clear manual override when going idle
             self._state = SystemState.IDLE
             print("State updated: IDLE (song=None)")
 
@@ -201,26 +208,32 @@ class StateManager:
 
     def start_led_recipe(self, recipe_name: str) -> bool:
         """
-        Start an LED recipe. Only works when not playing music.
+        Start an LED recipe. Can override music-reactive patterns when music is playing.
         
         Args:
             recipe_name: Name of the recipe to run
             
         Returns:
-            True if recipe was started, False if music is playing or recipe not found
+            True if recipe was started, False if recipe not found
         """
         with self._lock:
+            # If music is playing, override the music-reactive pattern
             if self._state == SystemState.PLAYING:
-                print("Cannot start LED recipe: song is currently playing")
-                return False
+                print(f"Starting LED recipe '{recipe_name}' to override music-reactive pattern")
+                success = self.light.run_recipe(recipe_name)
+                if success:
+                    self._manual_recipe_override = recipe_name
+                    print(f"StateManager: Started LED recipe '{recipe_name}' (overriding music-reactive pattern)")
+                return success
             
-            # Stop any current audio and go to idle lights first
+            # If not playing music, stop any current audio and go to idle lights first
             self._unsafe_stop_audio()
             self._enter_idle_lights()
             
             # Run the recipe
             success = self.light.run_recipe(recipe_name)
             if success:
+                self._manual_recipe_override = recipe_name
                 print(f"StateManager: Started LED recipe '{recipe_name}'")
             return success
 
@@ -325,5 +338,44 @@ class StateManager:
         except Exception:
             print("Warning: Failed to switch lights to idle breathing")
             pass
+
+    def stop_manual_recipe_override(self) -> bool:
+        """
+        Stop manual recipe override and return control to music-reactive pattern (if music is playing).
+        
+        Returns:
+            True if override was stopped, False if no override was active
+        """
+        with self._lock:
+            if self._manual_recipe_override is None:
+                return False
+            
+            print(f"Stopping manual recipe override '{self._manual_recipe_override}'")
+            self._manual_recipe_override = None
+            
+            # If music is playing, return to music-reactive pattern
+            if self._state == SystemState.PLAYING:
+                print("Returning control to music-reactive pattern")
+                # Use stored chip type to restore the correct music-reactive pattern
+                if self._current_chip_type == ChipType.DOUBLE:
+                    self.light.start_couple_active()
+                else:
+                    # Default to single active for SINGLE chip type or if chip type is unknown
+                    self.light.start_single_active()
+            else:
+                # If not playing music, go to idle
+                self._enter_idle_lights()
+            
+            return True
+
+    def get_manual_recipe_override(self) -> Optional[str]:
+        """
+        Get the currently active manual recipe override (if any).
+        
+        Returns:
+            Recipe name if override is active, None otherwise
+        """
+        with self._lock:
+            return self._manual_recipe_override
 
 

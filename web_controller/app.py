@@ -196,24 +196,40 @@ def index():
 
 @app.route('/start/<recipe_id>')
 def start_recipe(recipe_id):
-    """Start a specific recipe"""
+    """Start a specific recipe, or toggle it off if already active"""
     pixels = request.args.get('pixels', 60, type=int)
     
+    # Check if this recipe is already active as a manual override
+    if state_manager:
+        current_override = state_manager.get_manual_recipe_override()
+        if current_override == recipe_id:
+            # Same recipe is already active - deselect it
+            if state_manager.stop_manual_recipe_override():
+                global current_recipe
+                current_recipe = None
+                return jsonify({"status": "success", "recipe": None, "action": "deselected"})
+    
+    # Start the recipe
     if run_recipe(recipe_id, pixels):
-        return jsonify({"status": "success", "recipe": recipe_id, "pixels": pixels})
+        return jsonify({"status": "success", "recipe": recipe_id, "pixels": pixels, "action": "started"})
     else:
         return jsonify({"status": "error", "message": "Failed to start recipe"}), 500
 
 @app.route('/stop')
 def stop_recipe():
-    """Stop current recipe and clear all LEDs"""
+    """Stop current recipe and clear all LEDs, or return to music-reactive if music is playing"""
     global current_recipe, state_manager
     
     if state_manager:
-        # Stop current recipe and go to idle
-        state_manager.go_idle()
-        # Clear all LEDs
-        state_manager.clear_all_leds()
+        # Check if there's a manual override active
+        if state_manager.get_manual_recipe_override():
+            # Stop manual override (will return to music-reactive if music is playing)
+            state_manager.stop_manual_recipe_override()
+        else:
+            # No manual override, stop current recipe and go to idle
+            state_manager.go_idle()
+            # Clear all LEDs
+            state_manager.clear_all_leds()
     
     current_recipe = None
     return jsonify({"status": "success", "message": "Stopped and cleared"})
@@ -350,14 +366,24 @@ def get_status():
     
     # Check if a recipe is running (not playing music and recipe is set)
     music_playing = state_manager and state_manager.get_state().value == "PLAYING"
-    recipe_running = not music_playing and current_recipe is not None
+    manual_override = state_manager.get_manual_recipe_override() if state_manager else None
+    
+    # Recipe is running if:
+    # 1. Not playing music and current_recipe is set, OR
+    # 2. Playing music and manual override is active
+    recipe_running = (not music_playing and current_recipe is not None) or (music_playing and manual_override is not None)
+    
+    # Use manual override recipe name if available, otherwise use current_recipe
+    active_recipe = manual_override if manual_override else (current_recipe if recipe_running else None)
+    
     current_song = get_current_song()
     
     return jsonify({
         "running": recipe_running,
-        "recipe": current_recipe if recipe_running else None,
+        "recipe": active_recipe,
         "music_playing": music_playing,
-        "current_song": current_song if music_playing else None
+        "current_song": current_song if music_playing else None,
+        "manual_override": manual_override is not None
     })
 
 def create_app(state_mgr=None, cwd=".", port=5000):
