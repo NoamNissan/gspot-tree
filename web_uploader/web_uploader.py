@@ -13,6 +13,7 @@ app = Flask(__name__)
 # Default uploads directory
 DEFAULT_UPLOADS_DIR = "../songs"
 UPLOADS_DIR = DEFAULT_UPLOADS_DIR
+ALLOW_DELETE = True
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -69,6 +70,17 @@ HTML_TEMPLATE = """
         button:hover {
             background: #45a049;
         }
+        .delete-btn {
+            background: #f44336;
+            margin-top: 20px;
+        }
+        .delete-btn:hover {
+            background: #da190b;
+        }
+        .delete-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         .message {
             padding: 15px;
             margin: 20px 0;
@@ -100,6 +112,12 @@ HTML_TEMPLATE = """
             border-radius: 5px;
             display: flex;
             align-items: center;
+            gap: 10px;
+        }
+        .file-list input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
         }
         .file-list li.directory {
             background: #e3f2fd;
@@ -114,7 +132,14 @@ HTML_TEMPLATE = """
             color: inherit;
             display: flex;
             align-items: center;
-            width: 100%;
+            flex: 1;
+            gap: 10px;
+        }
+        .file-content {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            gap: 10px;
         }
         .file-icon {
             margin-right: 10px;
@@ -142,6 +167,28 @@ HTML_TEMPLATE = """
             margin: 0 5px;
         }
     </style>
+    <script>
+        function updateDeleteButton() {
+            const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = checkboxes.length === 0;
+        }
+        
+        function confirmDelete(event) {
+            const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+            const count = checkboxes.length;
+            if (count === 0) {
+                event.preventDefault();
+                return false;
+            }
+            const message = `Are you sure you want to delete ${count} item(s)? This cannot be undone.`;
+            if (!confirm(message)) {
+                event.preventDefault();
+                return false;
+            }
+            return true;
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -176,21 +223,34 @@ HTML_TEMPLATE = """
         {% endif %}
         
         {% if files %}
-        <ul class="file-list">
-            {% for item in files %}
-            <li class="{{ 'directory' if item.is_dir else '' }}">
-                {% if item.is_dir %}
-                <a href="?path={{ item.path }}">
-                    <span class="file-icon">📁</span>
-                    {{ item.name }}
-                </a>
-                {% else %}
-                <span class="file-icon">🎵</span>
-                {{ item.name }}
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
+        <form method="POST" onsubmit="return confirmDelete(event)">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="current_path" value="{{ current_path }}">
+            <ul class="file-list">
+                {% for item in files %}
+                <li class="{{ 'directory' if item.is_dir else '' }}">
+                    {% if allow_delete %}
+                    <input type="checkbox" name="delete_items" value="{{ item.name }}" 
+                           class="file-checkbox" onchange="updateDeleteButton()">
+                    {% endif %}
+                    {% if item.is_dir %}
+                    <a href="?path={{ item.path }}">
+                        <span class="file-icon">📁</span>
+                        {{ item.name }}
+                    </a>
+                    {% else %}
+                    <div class="file-content">
+                        <span class="file-icon">🎵</span>
+                        {{ item.name }}
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% if allow_delete %}
+            <button type="submit" id="deleteBtn" class="delete-btn" disabled>🗑️ Delete Selected</button>
+            {% endif %}
+        </form>
         {% else %}
         <div class="empty-message">No files yet. Upload some music!</div>
         {% endif %}
@@ -225,7 +285,47 @@ def upload_file():
         full_path = uploads_abs
     
     if request.method == 'POST':
-        if 'file' not in request.files:
+        action = request.form.get('action')
+        
+        if action == 'delete':
+            if not ALLOW_DELETE:
+                message = "❌ Delete functionality is disabled"
+                message_type = "error"
+            else:
+                # Handle deletion
+                delete_items = request.form.getlist('delete_items')
+                deleted = []
+                errors = []
+            
+            for item in delete_items:
+                # Sanitize item name
+                item = os.path.basename(item)
+                item_path = os.path.join(full_path, item)
+                
+                # Ensure item is within uploads directory
+                item_path = os.path.abspath(item_path)
+                if not item_path.startswith(uploads_abs):
+                    errors.append(f"{item}: Invalid path")
+                    continue
+                
+                try:
+                    if os.path.isdir(item_path):
+                        import shutil
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                    deleted.append(item)
+                except Exception as e:
+                    errors.append(f"{item}: {str(e)}")
+            
+                if deleted:
+                    message = f"🗑️ Deleted {len(deleted)} item(s): {', '.join(deleted)}"
+                    message_type = "success"
+                if errors:
+                    message = (message or "") + f"\n❌ Errors: {', '.join(errors)}"
+                    message_type = "error" if not deleted else "success"
+        
+        elif 'file' not in request.files:
             message = "No file selected"
             message_type = "error"
         else:
@@ -288,11 +388,12 @@ def upload_file():
         files=files_list,
         current_path=current_path,
         breadcrumbs=breadcrumbs,
-        root_name=os.path.basename(os.path.abspath(UPLOADS_DIR))
+        root_name=os.path.basename(os.path.abspath(UPLOADS_DIR)),
+        allow_delete=ALLOW_DELETE
     )
 
 def main():
-    global UPLOADS_DIR
+    global UPLOADS_DIR, ALLOW_DELETE
     
     parser = argparse.ArgumentParser(description='Simple web file uploader')
     parser.add_argument('--uploads-dir', default=DEFAULT_UPLOADS_DIR,
@@ -301,17 +402,23 @@ def main():
                         help='Port to run on (default: 5500)')
     parser.add_argument('--host', default='0.0.0.0',
                         help='Host to bind to (default: 0.0.0.0)')
+    parser.add_argument('--no-delete', action='store_true',
+                        help='Disable delete functionality')
     
     args = parser.parse_args()
     
     # Set uploads directory
     UPLOADS_DIR = args.uploads_dir
     
+    # Set delete permission
+    ALLOW_DELETE = not args.no_delete
+    
     # Create uploads directory if it doesn't exist
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     
     print(f"🎵 Music Uploader starting...")
     print(f"📁 Uploads directory: {os.path.abspath(UPLOADS_DIR)}")
+    print(f"🗑️ Delete enabled: {ALLOW_DELETE}")
     print(f"🌐 Server: http://{args.host}:{args.port}")
     print(f"Press Ctrl+C to stop")
     
